@@ -1,20 +1,22 @@
 services:
-  # L'application Rallly
   rallly:
-    image: lukevella/rallly:4   
+    image: lukevella/rallly:4
     restart: unless-stopped
     ports:
-      - "3000:3000"       
+      - "3000:3000"
     environment:
       NEXT_PUBLIC_BASE_URL: http://localhost:3000
-      SECRET_PASSWORD: ${SECRET_PASSWORD}    
+      SECRET_PASSWORD: ${SECRET_PASSWORD}
       DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD}@db:5432/rallly
       SUPPORT_EMAIL: ${SUPPORT_EMAIL}
+      # Envoi des e-mails vers Mailpit
+      SMTP_HOST: mailpit
+      SMTP_PORT: 1025
+      SMTP_SECURE: "false"
     depends_on:
       db:
         condition: service_healthy
 
-  # La base de données de Rallly
   db:
     image: postgres:16-alpine
     restart: unless-stopped
@@ -28,6 +30,13 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+
+  # Faux serveur mail : capte tous les e-mails de la stack
+  mailpit:
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+    ports:
+      - "8025:8025"    # interface web pour lire les e-mails
 
 volumes:
   db-data:
