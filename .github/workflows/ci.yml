@@ -11,7 +11,8 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  # A push to main must always finish: only superseded PR runs are cancelled.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   quality:
@@ -67,21 +68,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Write dummy .env
-        run: |
-          cat > .env <<'EOF2'
-          SECRET_PASSWORD=0123456789abcdef0123456789abcdef
-          POSTGRES_PASSWORD=ci-postgres
-          SUPPORT_EMAIL=support@example.com
-          AUTHENTIK_SECRET_KEY=ci-authentik-secret-key
-          AUTHENTIK_DB_PASSWORD=ci-authentik-db
-          OIDC_DISCOVERY_URL=http://authentik.localhost:9000/application/o/rallly/.well-known/openid-configuration
-          OIDC_CLIENT_ID=ci
-          OIDC_CLIENT_SECRET=ci
-          REQUIRE_OIDC_TO_VOTE=true
-          EOF2
+      # Built from .env.example so a variable used by the compose file but
+      # missing from .env.example is caught below.
+      - name: Build dummy .env from .env.example
+        run: sed -E 's/^([A-Z_]+)=$/\1=ci-dummy-value-0123456789abcdef0123/' .env.example > .env
       - name: Validate docker-compose.yml
-        run: docker compose config -q
+        run: |
+          docker compose config -q 2> compose.err || { cat compose.err; exit 1; }
+          cat compose.err
+          if grep -q "is not set" compose.err; then
+            echo "::error::docker-compose.yml uses variables missing from .env.example"
+            exit 1
+          fi
 
   docker-smoke:
     name: Docker smoke test

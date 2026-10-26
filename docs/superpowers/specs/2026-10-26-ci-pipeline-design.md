@@ -23,7 +23,7 @@ Fichiers : `.github/workflows/ci.yml` et `docker-compose.ci.yml` (override qui
 démarre l'image `rallly-ci:latest` déjà construite avec cache).
 
 **Déclencheurs** : `pull_request` vers `main`, `push` sur `main`. `concurrency`
-par PR/ref avec `cancel-in-progress`. Permissions : `contents: read`.
+par PR/ref ; `cancel-in-progress` seulement pour les PR (un push sur `main` va toujours au bout). Permissions : `contents: read`.
 **Aucun secret** : seul le `GITHUB_TOKEN` implicite est utilisé.
 
 **Jobs (parallèles)** :
@@ -31,9 +31,9 @@ par PR/ref avec `cancel-in-progress`. Permissions : `contents: read`.
 | Job | Contenu |
 |---|---|
 | `quality` | install `--frozen-lockfile`, `prisma generate`, `type-check`, `turbo check` (Biome), `check:structure`, `check:locales` |
-| `unit-tests` | `prisma generate`, `test:unit` (inclut `voter-identity.test.ts`) |
-| `compose-config` | `.env` factice depuis `.env.example`, `docker compose config -q` |
-| `docker-smoke` | `.env` factice, `docker compose up -d --build --wait rallly`, `curl /api/status` avec `database == "connected"`, `curl /login`, logs si échec ; cache de couches buildx (`gha`) |
+| `unit-tests` | `prisma generate`, `test:unit` (tous les tests Vitest du workspace) |
+| `compose-config` | `.env` construit depuis `.env.example` (valeurs vides remplies), `docker compose config -q`, échec si une variable du compose est absente de `.env.example` |
+| `docker-smoke` | `.env` factice, image construite par `docker/build-push-action`, puis `docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d --wait rallly` (sans `--build`), `curl /api/status` avec `database == "connected"`, `curl /login`, logs si échec ; cache de couches buildx (`gha`) |
 
 Les commandes `pnpm` s'exécutent dans `rallly/` (`working-directory`).
 Node 24. Authentik n'est pas démarré dans `docker-smoke` ; les variables
