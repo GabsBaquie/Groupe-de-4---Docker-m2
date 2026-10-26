@@ -9,3 +9,10 @@ entries:
       name: Alice Test
       email: alice@example.com
       password: alice-ci-password
+  - model: authentik_core.user
+    identifiers:
+      username: bob
+    attrs:
+      name: Bob Voter
+      email: bob@example.com
+      password: bob-ci-password
