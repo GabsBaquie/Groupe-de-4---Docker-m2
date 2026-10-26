@@ -7,9 +7,9 @@ services:
         - SELF_HOSTED=true
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "${RALLLY_PORT:-3000}:3000"
     environment:
-      NEXT_PUBLIC_BASE_URL: http://localhost:3000
+      NEXT_PUBLIC_BASE_URL: http://localhost:${RALLLY_PORT:-3000}
       SECRET_PASSWORD: ${SECRET_PASSWORD}
       DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD}@db:5432/rallly
       SUPPORT_EMAIL: ${SUPPORT_EMAIL}
@@ -50,7 +50,7 @@ services:
     image: axllent/mailpit:latest
     restart: unless-stopped
     ports:
-      - "8025:8025"    # interface web pour lire les e-mails
+      - "8025:8025" # interface web pour lire les e-mails
 
   # Fournisseur d'identité (IdP) OIDC
   authentik-db:
