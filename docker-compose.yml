@@ -1,6 +1,10 @@
 services:
   rallly:
-    image: lukevella/rallly:4
+    build:
+      context: ./rallly
+      dockerfile: ./apps/web/Dockerfile
+      args:
+        - SELF_HOSTED=true
     restart: unless-stopped
     ports:
       - "3000:3000"
