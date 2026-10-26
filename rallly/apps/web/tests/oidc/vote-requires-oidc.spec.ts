@@ -81,6 +81,28 @@ test.describe("voting requires an OIDC session", () => {
     await expect(page.getByTestId("vote-selector")).toHaveCount(0);
   });
 
+  // The /vote page has its own form and no sign-in prompt, so the refusal has
+  // to come from the server: a guest session must not be enough to vote.
+  test("an anonymous visitor is refused on the /vote page too", async ({
+    page,
+  }) => {
+    await page.goto(`${inviteUrl}/vote`);
+
+    await page
+      .getByTestId("vote-selector")
+      .first()
+      .getByRole("radio", { name: "Yes" })
+      .click();
+    await page.getByRole("button", { name: "Continue" }).click();
+    await page.getByPlaceholder("Jessie Smith").fill("Mallory Guest");
+    await page.getByRole("button", { name: "Save availability" }).click();
+
+    await expect(
+      page.getByText("Sign in with your organization account to vote."),
+    ).toBeVisible();
+    await expect(page.getByText("Your response has been saved")).toHaveCount(0);
+  });
+
   test("an OIDC user votes under their identity provider name and email", async ({
     page,
   }) => {
