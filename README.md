@@ -24,9 +24,11 @@ le blueprint échouerait (erreur loguée par le worker) et ton ancien provider r
 
 `.github/workflows/ci.yml` s'exécute sur chaque PR vers `main` et chaque push
 sur `main` : `Quality` (type-check, Biome, structure des features, locales),
-`Unit tests`, `Compose config` et `Docker smoke test`. Aucun secret GitHub
+`Unit tests`, `Compose config`, `Docker smoke test` et `E2E OIDC (Authentik)`
+(Playwright contre une vraie stack Rallly + Authentik : un invité ne peut pas voter,
+un utilisateur OIDC vote sous son nom et email IdP). Aucun secret GitHub
 n'est nécessaire.
 
 Protéger `main` : GitHub → Settings → Branches → Add rule sur `main` →
-*Require status checks to pass* → cocher les 4 jobs ci-dessus (ils n'apparaissent
+*Require status checks to pass* → cocher les 5 jobs ci-dessus (ils n'apparaissent
 qu'après un premier run).
