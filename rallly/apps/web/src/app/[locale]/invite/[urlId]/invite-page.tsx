@@ -11,6 +11,7 @@ import { VotingForm } from "@/features/poll/components/voting-form";
 import { FloatingComments } from "@/features/poll/invite/components/floating-comments";
 import { Trans } from "@/i18n/client";
 import { useHydrated } from "@/lib/datetime/use-hydrated";
+import { OidcSignInPrompt } from "./oidc-sign-in-prompt";
 
 /**
  * The voting grid depends on two things the server cannot know: the
@@ -31,8 +32,10 @@ export function InvitePage({
   description,
   footerLinks,
   canManage,
+  oidcProviderName,
 }: {
   pollId: string;
+  oidcProviderName: string;
   description: React.ReactNode;
   footerLinks: { label: string; href: string }[];
   canManage: boolean;
@@ -46,6 +49,10 @@ export function InvitePage({
   const content = (
     <>
       <EventCard description={description} />
+      <OidcSignInPrompt
+        providerName={oidcProviderName}
+        redirectTo={`/invite/${pollId}`}
+      />
       <VotingForm>
         <ResponsiveResults />
         <FloatingComments />

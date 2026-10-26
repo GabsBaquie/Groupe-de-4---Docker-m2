@@ -29,7 +29,7 @@ import { useForm } from "react-hook-form";
 import * as z from "zod";
 import { IfCloudHosted } from "@/components/environment";
 import { Link } from "@/components/link";
-import { usePollOrNull } from "@/features/poll/client";
+import { useOidcVoting, usePollOrNull } from "@/features/poll/client";
 import {
   useAddParticipant,
   useEditToken,
@@ -138,6 +138,7 @@ export const NewParticipantForm = (props: NewParticipantModalProps) => {
   const { timeZone } = useDateTimeConfig();
   const { user, createGuestIfNeeded } = useUser();
   const isLoggedIn = user && !user.isGuest;
+  const identityLocked = useOidcVoting() === "identityLocked";
   const form = useForm({
     resolver: zodResolver(schema),
     defaultValues: {
@@ -166,6 +167,10 @@ export const NewParticipantForm = (props: NewParticipantModalProps) => {
         return t("newParticipantFormErrorTooManyRequests", {
           defaultValue:
             "You have made too many attempts. Please wait a while and try again.",
+        });
+      case "authRequired":
+        return t("newParticipantFormErrorAuthRequired", {
+          defaultValue: "Sign in with your organization account to vote.",
         });
       case "unauthorized":
         return t("newParticipantFormErrorUnauthorized", {
@@ -313,7 +318,7 @@ export const NewParticipantForm = (props: NewParticipantModalProps) => {
                     className="w-full"
                     {...passwordManagerIgnoreProps}
                     autoFocus={true}
-                    disabled={formState.isSubmitting}
+                    disabled={formState.isSubmitting || identityLocked}
                     placeholder={t("namePlaceholder")}
                     {...field}
                   />
@@ -337,7 +342,7 @@ export const NewParticipantForm = (props: NewParticipantModalProps) => {
                   <Input
                     className="w-full"
                     {...passwordManagerIgnoreProps}
-                    disabled={formState.isSubmitting}
+                    disabled={formState.isSubmitting || identityLocked}
                     placeholder={t("emailPlaceholder")}
                     {...field}
                   />
