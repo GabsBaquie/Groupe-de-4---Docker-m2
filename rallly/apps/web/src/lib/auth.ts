@@ -721,7 +721,9 @@ export const authLib = betterAuth({
         },
       }
     : undefined,
-  trustedOrigins: [absoluteUrl()],
+  trustedOrigins: env.ADDITIONAL_TRUSTED_ORIGIN
+    ? [absoluteUrl(), env.ADDITIONAL_TRUSTED_ORIGIN]
+    : [absoluteUrl()],
   baseURL,
 });
 

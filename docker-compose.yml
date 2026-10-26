@@ -27,6 +27,8 @@ services:
       - "3000:3000"
     environment:
       NEXT_PUBLIC_BASE_URL: http://localhost:3000
+      # Accès alternatif via le reverse proxy (voir service `proxy`)
+      ADDITIONAL_TRUSTED_ORIGIN: http://rallly.localhost
       SECRET_PASSWORD: ${SECRET_PASSWORD}
       DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD}@db:5432/rallly
       SUPPORT_EMAIL: ${SUPPORT_EMAIL}
