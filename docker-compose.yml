@@ -1,4 +1,21 @@
 services:
+  # Reverse proxy : point d'entrée unique vers Rallly et Authentik, routage
+  # par nom d'hôte (rallly.localhost / authentik.localhost). Les ports directs
+  # (3000, 9000) restent ouverts en parallèle pour ne pas casser la CI, qui
+  # s'appuie dessus (voir .github/workflows/ci.yml).
+  proxy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./proxy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - rallly
+      - authentik-server
+
   rallly:
     build:
       context: ./rallly
@@ -10,6 +27,8 @@ services:
       - "3000:3000"
     environment:
       NEXT_PUBLIC_BASE_URL: http://localhost:3000
+      # Accès alternatif via le reverse proxy (voir service `proxy`)
+      ADDITIONAL_TRUSTED_ORIGIN: http://rallly.localhost
       SECRET_PASSWORD: ${SECRET_PASSWORD}
       DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD}@db:5432/rallly
       SUPPORT_EMAIL: ${SUPPORT_EMAIL}
@@ -25,6 +44,8 @@ services:
       # true : seuls les utilisateurs connectés via OIDC peuvent voter
       REQUIRE_OIDC_TO_VOTE: ${REQUIRE_OIDC_TO_VOTE:-true}
     # authentik.localhost doit être joignable depuis le conteneur ET le navigateur (*.localhost se résout en loopback)
+    # Requis par la CI, qui pointe OIDC_DISCOVERY_URL sur authentik.localhost:9000
+    # (voir .github/workflows/ci.yml) plutôt que sur le nom de service interne.
     extra_hosts:
       - "authentik.localhost:host-gateway"
     depends_on:
@@ -103,3 +124,5 @@ services:
 volumes:
   db-data:
   authentik-db-data:
+  caddy-data:
+  caddy-config:

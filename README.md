@@ -1,5 +1,20 @@
 # Groupe-de-4---Docker-m2
 
+## Reverse proxy
+
+`docker compose up -d` démarre aussi un proxy Caddy (`proxy/Caddyfile`), point
+d'entrée par nom d'hôte vers Rallly et Authentik :
+
+- http://rallly.localhost — l'application
+- http://authentik.localhost — l'IdP
+
+`*.localhost` résout automatiquement en loopback dans tous les navigateurs
+modernes (RFC 6761) : aucune configuration DNS/`/etc/hosts` nécessaire.
+
+Les ports directs (`3000`, `9000`) restent ouverts en parallèle du proxy — la
+CI (`.github/workflows/ci.yml`) et les scripts ci-dessous s'appuient encore
+dessus ; seule la base de données n'est jamais exposée.
+
 ## Vote réservé aux utilisateurs OIDC (Authentik)
 
 Avec `REQUIRE_OIDC_TO_VOTE=true`, il n'est plus possible de voter en invité :
