@@ -431,7 +431,7 @@
   "guestPollAlertDescription": "<0>Créez un compte</0> ou <1>connectez-vous</1> pour réclamer ce vote.",
   "guestPollAlertTitle": "Vos droits d'administrateur peuvent être perdus si vous effacez vos cookies",
   "hexColor": "Code hexadécimal",
-  "hiddenParticipantName": "Participant n°{number}",
+  "hiddenParticipantName": "Anonyme",
   "hideAttribution": "Masquer l'attribution",
   "hideEmptyDays": "Masquer les jours vides",
   "hideParticipantsDescription": "Les participants ne pourront pas voir les noms des autres répondants.",

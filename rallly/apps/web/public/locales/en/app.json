@@ -437,7 +437,7 @@
   "guestPollAlertTitle": "Your administrator rights can be lost if you clear your cookies",
   "guestSessionUnavailableError": "We couldn't start a session for you. Check that cookies are enabled and try again.",
   "hexColor": "Hex color",
-  "hiddenParticipantName": "Participant #{number}",
+  "hiddenParticipantName": "Anonymous",
   "hideAttribution": "Hide attribution",
   "hideEmptyDays": "Hide empty days",
   "hideParticipantsDescription": "Participants will not be able to see the names of other respondents.",
