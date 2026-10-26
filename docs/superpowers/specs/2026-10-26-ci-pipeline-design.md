@@ -12,13 +12,15 @@ déploiement.
 - Dépôt GitHub : `GabsBaquie/Groupe-de-4---Docker-m2`.
 - `rallly/.github/workflows/` contient les workflows amont de Rallly. GitHub ne
   lit que `.github/workflows/` à la racine : ils ne s'exécutent donc pas.
-- Les actions composites `rallly/.github/actions/{setup-node,pnpm-install}` sont
-  réutilisables depuis la racine (`./rallly/.github/actions/...`).
+- Les actions composites `rallly/.github/actions/*` supposent un `package.json`
+  et un lockfile à la racine du workspace : **non utilisables** ici (ils sont
+  dans `rallly/`). Les étapes setup/install sont inline.
 - pnpm est épinglé via `packageManager` (12.14.0) ; `pnpm/action-setup` le lit.
 
 ## Design
 
-Un seul fichier : `.github/workflows/ci.yml`.
+Fichiers : `.github/workflows/ci.yml` et `docker-compose.ci.yml` (override qui
+démarre l'image `rallly-ci:latest` déjà construite avec cache).
 
 **Déclencheurs** : `pull_request` vers `main`, `push` sur `main`. `concurrency`
 par PR/ref avec `cancel-in-progress`. Permissions : `contents: read`.

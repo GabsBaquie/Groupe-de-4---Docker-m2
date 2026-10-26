@@ -13,7 +13,7 @@ Docker Compose stack for self-hosting [Rallly](https://rallly.co) (scheduling/po
 - View logs: `docker compose logs -f [service]`
 - Recreate after config changes: `docker compose up -d --force-recreate`
 
-There is no build, lint, or test tooling in this repo.
+There is no build, lint, or test tooling at the repo root. CI lives in `.github/workflows/ci.yml` (jobs: Quality, Unit tests, Compose config, Docker smoke test); pnpm commands run from `rallly/`.
 
 ## Architecture
 
