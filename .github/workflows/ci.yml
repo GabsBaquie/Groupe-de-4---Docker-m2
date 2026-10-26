@@ -61,3 +61,24 @@ jobs:
       - run: pnpm db:generate
       - name: Run unit tests
         run: pnpm test:unit
+
+  compose-config:
+    name: Compose config
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Write dummy .env
+        run: |
+          cat > .env <<'EOF2'
+          SECRET_PASSWORD=0123456789abcdef0123456789abcdef
+          POSTGRES_PASSWORD=ci-postgres
+          SUPPORT_EMAIL=support@example.com
+          AUTHENTIK_SECRET_KEY=ci-authentik-secret-key
+          AUTHENTIK_DB_PASSWORD=ci-authentik-db
+          OIDC_DISCOVERY_URL=http://authentik.localhost:9000/application/o/rallly/.well-known/openid-configuration
+          OIDC_CLIENT_ID=ci
+          OIDC_CLIENT_SECRET=ci
+          REQUIRE_OIDC_TO_VOTE=true
+          EOF2
+      - name: Validate docker-compose.yml
+        run: docker compose config -q
