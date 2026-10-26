@@ -1,0 +1,20 @@
+{
+  "name": "@rallly/utils",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "test:unit": "vitest run",
+    "type-check": "tsc --noEmit"
+  },
+  "exports": {
+    "./*": "./src/*.ts"
+  },
+  "dependencies": {
+    "nanoid": "^5.1.16"
+  },
+  "devDependencies": {
+    "@rallly/tsconfig": "workspace:*",
+    "@types/node": "^24.1.0",
+    "vitest": "^4.1.11"
+  }
+}

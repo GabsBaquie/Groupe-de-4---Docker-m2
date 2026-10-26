@@ -1,0 +1,6 @@
+{
+  "extends": "@rallly/tsconfig/next.json",
+  "files": ["i18next.d.ts"],
+  "include": ["**/*.ts", "**/*.tsx"],
+  "exclude": ["node_modules", ".react-email"]
+}

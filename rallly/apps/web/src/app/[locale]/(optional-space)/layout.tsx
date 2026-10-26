@@ -1,0 +1,76 @@
+import { Suspense } from "react";
+import { RouterLoadingIndicator } from "@/components/router-loading-indicator";
+import { SessionRefresher } from "@/components/session-refresher";
+import { TierProvider } from "@/features/billing/client";
+import { PayWall } from "@/features/billing/components/pay-wall";
+import { loadPayWallPricing } from "@/features/billing/loaders";
+import { resolveSpaceTier } from "@/features/billing/utils";
+import { OpenPollLimitDialog } from "@/features/poll/limit/components/open-poll-limit-dialog";
+import { isQuickCreateEnabled } from "@/features/quick-create/constants";
+import { getActiveSpaceForUser } from "@/features/space/data";
+import { loadOnboardingGate } from "@/features/space/loaders";
+import { UserProvider } from "@/features/user/client";
+import { loadUser } from "@/features/user/loaders";
+import { getLocale } from "@/i18n/server/get-locale";
+import { getSession } from "@/lib/auth";
+import { DeviceDateTimeProvider } from "@/lib/datetime/device";
+import { getDeviceDateTimeConfig } from "@/lib/datetime/server";
+
+// The session awaits sit below the Suspense boundary in the default export
+// so the document shell can flush before they resolve.
+async function OptionalSpaceGate({ children }: { children: React.ReactNode }) {
+  // Guests may only enter when quick create is enabled.
+  if (!isQuickCreateEnabled) {
+    await loadUser();
+  }
+
+  // Signed-in accounts finish onboarding before managing or creating polls.
+  await loadOnboardingGate();
+
+  const [locale, deviceDateTimeConfig, session, payWallPricing] =
+    await Promise.all([
+      getLocale(),
+      getDeviceDateTimeConfig(),
+      getSession(),
+      loadPayWallPricing(),
+    ]);
+
+  const user = session?.user;
+
+  const space =
+    user && !user.isGuest ? await getActiveSpaceForUser(user.id) : null;
+  // Guests have no space; they get whatever an unpaid space resolves to
+  const tier = space?.tier ?? resolveSpaceTier("hobby");
+
+  return (
+    <>
+      <SessionRefresher />
+      <UserProvider user={user ?? null}>
+        <DeviceDateTimeProvider
+          locale={locale}
+          timeZone={
+            user?.timeZone ?? deviceDateTimeConfig.timeZone ?? undefined
+          }
+          timeFormat={
+            user?.timeFormat ?? deviceDateTimeConfig.timeFormat ?? undefined
+          }
+          weekStart={user?.weekStart ?? undefined}
+        >
+          <TierProvider tier={tier}>
+            {children}
+            <PayWall pricing={payWallPricing} />
+            <OpenPollLimitDialog />
+          </TierProvider>
+        </DeviceDateTimeProvider>
+      </UserProvider>
+    </>
+  );
+}
+
+export default function Layout({ children }: { children: React.ReactNode }) {
+  return (
+    <Suspense fallback={<RouterLoadingIndicator />}>
+      <OptionalSpaceGate>{children}</OptionalSpaceGate>
+    </Suspense>
+  );
+}

@@ -1,0 +1,104 @@
+import * as z from "zod";
+
+// =========================
+// Enums & Basic Types
+// =========================
+
+export const licenseTypeSchema = z.enum(["PLUS", "ORGANIZATION", "ENTERPRISE"]);
+export type LicenseType = z.infer<typeof licenseTypeSchema>;
+
+export const licenseStatusSchema = z.enum(["ACTIVE", "REVOKED"]);
+export type LicenseStatus = z.infer<typeof licenseStatusSchema>;
+
+// =========================
+// Generic API Response
+// =========================
+
+export const apiResponseSchema = <T extends z.ZodTypeAny>(dataSchema: T) =>
+  z.object({
+    data: dataSchema.optional(),
+    error: z.string().optional(),
+  });
+
+export type ApiResponse<T> = {
+  data?: T;
+  error?: string;
+};
+
+// =========================
+// Create License
+// =========================
+
+export const createLicenseInputSchema = z.object({
+  type: licenseTypeSchema,
+  seats: z.coerce.number().optional(),
+  expiresAt: z.coerce.date().optional(),
+  licenseeEmail: z.string().optional(),
+  licenseeName: z.string().optional(),
+  version: z.coerce.number().optional(),
+  idempotencyKey: z.string().min(1).optional(),
+});
+export type CreateLicenseInput = z.infer<typeof createLicenseInputSchema>;
+
+export const createLicenseResponseSchema = apiResponseSchema(
+  z.object({
+    key: z.string(),
+  }),
+);
+export type CreateLicenseResponse = z.infer<typeof createLicenseResponseSchema>;
+
+// =========================
+// Validate License Key
+// =========================
+
+// The public endpoint feeds these into a Redis rate limit key and Postgres
+// text columns, which cap key size and reject NUL bytes.
+const boundedText = (max: number) =>
+  z
+    .string()
+    .max(max)
+    .refine((value) => !value.includes("\0"), "Must not contain NUL bytes");
+
+export const validateLicenseKeyInputSchema = z.object({
+  key: boundedText(64),
+  fingerprint: boundedText(256).optional(),
+});
+export type ValidateLicenseInputKeySchema = z.infer<
+  typeof validateLicenseKeyInputSchema
+>;
+
+export const validateLicenseKeyResponseSchema = apiResponseSchema(
+  z.object({
+    key: z.string(),
+    valid: z.boolean(),
+    status: licenseStatusSchema,
+    issuedAt: z.coerce.date(),
+    expiresAt: z.coerce.date().nullable(),
+    licenseeEmail: z.string().nullable(),
+    licenseeName: z.string().nullable(),
+    seats: z.coerce.number().nullable(),
+    type: licenseTypeSchema,
+    version: z.coerce.number().nullable(),
+    whiteLabelAddon: z.boolean(),
+  }),
+);
+
+export type ValidateLicenseKeyResponse = z.infer<
+  typeof validateLicenseKeyResponseSchema
+>;
+
+export const licenseCheckoutProductSchema = z.enum(["plus", "organization"]);
+
+export type LicenseCheckoutProduct = z.infer<
+  typeof licenseCheckoutProductSchema
+>;
+
+export const licenseCheckoutMetadataSchema = z.object({
+  licenseType: licenseTypeSchema,
+  version: z.coerce.number(),
+  seats: z.coerce.number(),
+});
+
+export type LicenseCheckoutMetadata = z.infer<
+  typeof licenseCheckoutMetadataSchema
+>;

@@ -1,0 +1,30 @@
+import { posthog } from "@rallly/posthog/client";
+import { absoluteUrl } from "@rallly/utils/absolute-url";
+import {
+  anonymousClient,
+  emailOTPClient,
+  genericOAuthClient,
+  inferAdditionalFields,
+  lastLoginMethodClient,
+} from "better-auth/client/plugins";
+import { createAuthClient } from "better-auth/react";
+import type { Auth } from "@/lib/auth";
+import { LAST_LOGIN_METHOD_COOKIE_NAME } from "@/lib/auth-config";
+import { clearBrowserQueryCache } from "@/lib/query-client";
+
+export const authClient = createAuthClient({
+  baseURL: absoluteUrl("/api/better-auth"),
+  plugins: [
+    inferAdditionalFields<Auth>(),
+    emailOTPClient(),
+    genericOAuthClient(),
+    lastLoginMethodClient({ cookieName: LAST_LOGIN_METHOD_COOKIE_NAME }),
+    anonymousClient(),
+  ],
+});
+
+export async function signOut() {
+  await authClient.signOut();
+  posthog?.reset();
+  clearBrowserQueryCache();
+}

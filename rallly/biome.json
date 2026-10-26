@@ -1,0 +1,136 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.3.14/schema.json",
+  "root": true,
+  "plugins": [
+    "./biome-plugins/use-icon-button-label.grit",
+    "./biome-plugins/no-raw-datetime-formatting.grit"
+  ],
+  "assist": {
+    "actions": {
+      "source": {
+        "organizeImports": "on"
+      }
+    }
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true,
+      "style": {
+        "noRestrictedImports": {
+          "level": "error",
+          "options": {
+            "paths": {
+              "dayjs": "Use the formatters in `@/lib/datetime` for display. dayjs is only allowed in files on the migration allowlist (see overrides in biome.json).",
+              "@/lib/dayjs": "Use the formatters in `@/lib/datetime` for display. dayjs is only allowed in files on the migration allowlist (see overrides in biome.json)."
+            }
+          }
+        },
+        "noUselessElse": "off",
+        "noParameterAssign": "error",
+        "useAsConstAssertion": "error",
+        "useDefaultParameterLast": "error",
+        "useEnumInitializers": "error",
+        "useSelfClosingElements": "error",
+        "useSingleVarDeclarator": "error",
+        "noUnusedTemplateLiteral": "error",
+        "useNumberNamespace": "error",
+        "noInferrableTypes": "error",
+        "useImportType": {
+          "options": {
+            "style": "separatedType"
+          },
+          "level": "error"
+        }
+      },
+      "correctness": {
+        "noUnusedImports": "error"
+      },
+      "nursery": {
+        "useSortedClasses": {
+          "options": {
+            "functions": ["cn", "clsx", "cva", "tw"]
+          },
+          "level": "error",
+          "fix": "safe"
+        }
+      },
+      "a11y": {
+        "useAnchorContent": "off"
+      }
+    }
+  },
+  "overrides": [
+    {
+      "includes": [
+        "**/src/app/**/blog/post-preview.tsx",
+        "**/src/components/blog/date-formatter.tsx",
+        "**/tests/**",
+        "packages/screenshots/**"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["**/event-calendar/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noNonNullAssertion": "off"
+          },
+          "suspicious": {
+            "noExplicitAny": "off",
+            "noAssignInExpressions": "off",
+            "noConfusingVoidType": "off",
+            "useIterableCallbackReturn": "off",
+            "noArrayIndexKey": "off"
+          },
+          "correctness": {
+            "useExhaustiveDependencies": "off"
+          },
+          "a11y": {
+            "useSemanticElements": "off",
+            "useFocusableInteractive": "off",
+            "useKeyWithClickEvents": "off",
+            "noStaticElementInteractions": "off"
+          }
+        }
+      }
+    }
+  ],
+  "formatter": {
+    "enabled": true,
+    "formatWithErrors": false,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 80
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "double",
+      "trailingCommas": "all",
+      "semicolons": "always",
+      "bracketSpacing": true,
+      "jsxQuoteStyle": "double",
+      "quoteProperties": "asNeeded"
+    },
+    "parser": {
+      "unsafeParameterDecoratorsEnabled": true
+    }
+  },
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    }
+  }
+}

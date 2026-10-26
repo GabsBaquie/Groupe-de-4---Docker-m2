@@ -1,0 +1,274 @@
+import { buttonVariants } from "@rallly/ui";
+import { AvatarGroup, AvatarGroupCount } from "@rallly/ui/avatar";
+import { MarkdownDescription } from "@rallly/ui/markdown-description";
+import { absoluteUrl } from "@rallly/utils/absolute-url";
+import { MapPinIcon } from "lucide-react";
+import type { Metadata } from "next";
+import { notFound } from "next/navigation";
+import { cache } from "react";
+import { SpaceBranding } from "@/app/[locale]/e/[id]/components/space-branding";
+import { UserDropdown } from "@/app/[locale]/e/[id]/components/user-dropdown";
+import LogoMarkGray from "@/assets/logo-mark-gray.svg";
+import { Link } from "@/components/link";
+import { OptimizedAvatarImage } from "@/components/optimized-avatar-image";
+import { SessionRefresher } from "@/components/session-refresher";
+import { BrandStyle } from "@/features/branding/components/brand-style";
+import { formatLocationText } from "@/features/location/utils";
+import {
+  EventCalendarCard,
+  EventDate,
+  EventTimeRange,
+} from "@/features/scheduled-event/components/event-date-time";
+import { isScheduledEventEnabled } from "@/features/scheduled-event/constants";
+import {
+  createScheduledEventDTO,
+  getEventAcceptedCount,
+  getEventAttendeePreview,
+  getPublicScheduledEvent,
+} from "@/features/scheduled-event/data";
+import { getSpaceBranding } from "@/features/space/data";
+import { getUserProfile } from "@/features/user/data";
+import { getTranslation } from "@/i18n/server";
+import { getLocale } from "@/i18n/server/get-locale";
+import { getSession } from "@/lib/auth";
+import { DeviceDateTimeProvider } from "@/lib/datetime/device";
+import { getDeviceDateTimeConfig } from "@/lib/datetime/server";
+import {
+  EventDetail,
+  EventDetailContent,
+  EventDetailDescription,
+  EventDetailIcon,
+  EventDetailTitle,
+} from "./components/event-detail";
+import {
+  EventHeader,
+  EventSubtitle,
+  EventTitle,
+} from "./components/event-header";
+import { EventSection, EventSectionTitle } from "./components/event-section";
+import { RSVPArea } from "./components/rsvp-area";
+import {
+  RsvpCard,
+  RsvpCardContent,
+  RsvpCardTitle,
+} from "./components/rsvp-card";
+
+const ATTENDEE_PREVIEW_LIMIT = 5;
+
+const getScheduledEvent = cache(async (id: string) => {
+  const event = await getPublicScheduledEvent(id);
+
+  if (!event || event.deletedAt) {
+    notFound();
+  }
+
+  return {
+    ...event,
+    ...createScheduledEventDTO(event),
+  };
+});
+
+export default async function EventPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  if (!isScheduledEventEnabled) {
+    notFound();
+  }
+  const { id } = await params;
+  const event = await getScheduledEvent(id);
+  const [branding, host, acceptedCount, visibleAttendees] = await Promise.all([
+    getSpaceBranding(event.spaceId),
+    getUserProfile(event.userId),
+    getEventAcceptedCount({ eventId: id }),
+    event.hideAttendees
+      ? Promise.resolve([])
+      : getEventAttendeePreview({ eventId: id, take: ATTENDEE_PREVIEW_LIMIT }),
+  ]);
+
+  if (!host) {
+    // The host relation cascades on delete, so a missing host means the
+    // cached event is stale and the event no longer exists.
+    notFound();
+  }
+
+  const isBranded = !!branding?.showBranding && !!branding.image;
+  const brandingColor =
+    branding?.showBranding && branding.primaryColor
+      ? branding.primaryColor
+      : null;
+
+  const [session, { t }, locale, deviceDateTimeConfig] = await Promise.all([
+    getSession(),
+    getTranslation(),
+    getLocale(),
+    getDeviceDateTimeConfig(),
+  ]);
+
+  return (
+    <DeviceDateTimeProvider
+      locale={locale}
+      timeZone={deviceDateTimeConfig.timeZone}
+      timeFormat={deviceDateTimeConfig.timeFormat}
+    >
+      <div className="page-bg-gray-50 absolute inset-0 h-dvh overflow-auto md:h-dvh md:items-center md:justify-center md:p-5 dark:bg-gray-900">
+        <SessionRefresher />
+        {brandingColor ? <BrandStyle primaryColor={brandingColor} /> : null}
+        <header className="fixed top-0 right-0 left-0 z-10 flex justify-between p-4">
+          <Link href="/">
+            <LogoMarkGray className="size-8 text-muted-foreground" />
+          </Link>
+          <div className="flex items-center gap-2">
+            {session?.user.isGuest === false ? (
+              <UserDropdown
+                name={session.user.name}
+                email={session.user.email}
+                image={session.user.image ?? undefined}
+              />
+            ) : (
+              <Link
+                href="/login"
+                className={buttonVariants({ variant: "ghost", size: "sm" })}
+              >
+                {t("signIn", { defaultValue: "Sign in" })}
+              </Link>
+            )}
+          </div>
+        </header>
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className="mx-auto max-w-lg pt-16"
+        >
+          <div className="flex flex-col justify-between gap-6 p-4">
+            <EventHeader>
+              {isBranded && branding ? (
+                <SpaceBranding
+                  className="mb-4"
+                  name={branding.name}
+                  image={branding.image ?? undefined}
+                />
+              ) : null}
+              <EventTitle>{event.title}</EventTitle>
+              <EventSubtitle className="flex items-center gap-2">
+                <OptimizedAvatarImage
+                  name={host.name}
+                  src={host.image ?? undefined}
+                  size="sm"
+                />
+                {t("organizedBy", {
+                  defaultValue: "Organized by {name}",
+                  name: host.name,
+                })}
+              </EventSubtitle>
+              <div className="mt-4 grid gap-4">
+                <EventDetail>
+                  <EventCalendarCard
+                    start={event.start}
+                    allDay={event.allDay}
+                    timeZone={event.timeZone}
+                  />
+                  <EventDetailContent>
+                    <EventDetailTitle data-testid="event-start-date">
+                      <EventDate
+                        value={event.start}
+                        preset="weekdayMonthDay"
+                        allDay={event.allDay}
+                        timeZone={event.timeZone}
+                      />
+                    </EventDetailTitle>
+                    <EventDetailDescription data-testid="event-time-range">
+                      <EventTimeRange
+                        start={event.start}
+                        end={event.end}
+                        allDay={event.allDay}
+                        timeZone={event.timeZone}
+                        showTimeZone={true}
+                      />
+                    </EventDetailDescription>
+                  </EventDetailContent>
+                </EventDetail>
+                {event.location ? (
+                  <EventDetail>
+                    <EventDetailIcon>
+                      <MapPinIcon />
+                    </EventDetailIcon>
+                    <EventDetailContent>
+                      <EventDetailTitle>
+                        {formatLocationText(event.location)}
+                      </EventDetailTitle>
+                    </EventDetailContent>
+                  </EventDetail>
+                ) : null}
+              </div>
+            </EventHeader>
+            <RsvpCard>
+              <RsvpCardTitle>
+                {t("rsvpCardTitle", { defaultValue: "Registration" })}
+              </RsvpCardTitle>
+              <RsvpCardContent>
+                <RSVPArea
+                  eventId={event.id}
+                  status={event.status}
+                  start={event.start}
+                  end={event.end}
+                  capacity={event.capacity}
+                  acceptedCount={acceptedCount}
+                />
+              </RsvpCardContent>
+            </RsvpCard>
+            {event.description ? (
+              <EventSection>
+                <EventSectionTitle>
+                  {t("eventPageAbout", { defaultValue: "About" })}
+                </EventSectionTitle>
+                <MarkdownDescription content={event.description} />
+              </EventSection>
+            ) : null}
+            {visibleAttendees.length > 0 ? (
+              <EventSection>
+                <EventSectionTitle>
+                  {t("eventPageGoingCount", {
+                    defaultValue:
+                      "{count, plural, one {# going} other {# going}}",
+                    count: acceptedCount,
+                  })}
+                </EventSectionTitle>
+                <AvatarGroup>
+                  {visibleAttendees.map((attendee) => (
+                    <OptimizedAvatarImage
+                      key={attendee.id}
+                      name={attendee.name}
+                      src={attendee.image}
+                      size="md"
+                    />
+                  ))}
+                  {acceptedCount > visibleAttendees.length ? (
+                    <AvatarGroupCount>
+                      +{acceptedCount - visibleAttendees.length}
+                    </AvatarGroupCount>
+                  ) : null}
+                </AvatarGroup>
+              </EventSection>
+            ) : null}
+          </div>
+        </main>
+      </div>
+    </DeviceDateTimeProvider>
+  );
+}
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  const { id } = await params;
+  const event = await getScheduledEvent(id);
+
+  return {
+    title: event.title,
+    metadataBase: new URL(absoluteUrl()),
+  };
+}

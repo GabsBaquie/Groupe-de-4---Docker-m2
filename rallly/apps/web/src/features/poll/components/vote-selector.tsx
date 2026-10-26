@@ -1,0 +1,101 @@
+import type { VoteType } from "@rallly/database";
+import { buttonVariants, cn } from "@rallly/ui";
+import * as React from "react";
+
+import { getVoteTypes } from "@/features/poll/constants";
+import { useTranslation } from "@/i18n/client";
+
+import VoteIcon from "./vote-icon";
+
+export interface VoteSelectorProps {
+  value?: VoteType;
+  /**
+   * Accessible description of the option being voted on (e.g. "Tue 30 Jun
+   * 2026, 1:00 PM – 2:00 PM") so screen readers can tie the vote to its
+   * date/time.
+   */
+  optionLabel?: string;
+  onChange?: (value: VoteType) => void;
+  onFocus?: React.FocusEventHandler<HTMLButtonElement>;
+  onBlur?: React.FocusEventHandler<HTMLButtonElement>;
+  onKeyDown?: React.KeyboardEventHandler<HTMLButtonElement>;
+  /**
+   * When false the tentative vote is dropped from the cycle, so clicking
+   * alternates yes → no.
+   */
+  allowTentativeVotes?: boolean;
+  className?: string;
+}
+
+export const toggleVote = (value?: VoteType, allowTentativeVotes = true) => {
+  const orderedVoteTypes = getVoteTypes(allowTentativeVotes);
+  if (!value) return orderedVoteTypes[0];
+  const index = orderedVoteTypes.indexOf(value);
+  // A vote cast before the tentative option was turned off is not in the
+  // cycle; advancing from it starts over rather than landing on -1 + 1 = 0
+  // by coincidence.
+  if (index === -1) return orderedVoteTypes[0];
+  return orderedVoteTypes[(index + 1) % orderedVoteTypes.length];
+};
+
+export const VoteSelector = React.forwardRef<
+  HTMLButtonElement,
+  VoteSelectorProps
+>(function VoteSelector(
+  {
+    value,
+    optionLabel,
+    onChange,
+    onFocus,
+    onBlur,
+    onKeyDown,
+    allowTentativeVotes = true,
+    className,
+  },
+  ref,
+) {
+  const { t } = useTranslation();
+
+  const voteLabel = (() => {
+    switch (value) {
+      case "yes":
+        return t("yes", { defaultValue: "Yes" });
+      case "ifNeedBe":
+        return t("ifNeedBe", { defaultValue: "If need be" });
+      case "no":
+        return t("no", { defaultValue: "No" });
+      default:
+        return t("pending", { defaultValue: "Pending" });
+    }
+  })();
+
+  return (
+    <button
+      data-testid="vote-selector"
+      type="button"
+      aria-label={optionLabel ? `${optionLabel}, ${voteLabel}` : voteLabel}
+      onFocus={onFocus}
+      onBlur={onBlur}
+      onKeyDown={onKeyDown}
+      className={cn(
+        buttonVariants({
+          size: "icon-sm",
+        }),
+        // The default variant's backdrop-blur and press-scale each make this
+        // button a containing block, which would trap the after:inset-0 overlay
+        // callers use to extend the tap target to the whole cell/row. The scale
+        // applies only while pressed, so it collapses the overlay between
+        // pointerdown and pointerup: the release lands on the parent and the
+        // click never reaches this button.
+        "rounded-[min(var(--radius-md),12px)] backdrop-blur-none not-aria-[haspopup]:active:scale-none",
+        className,
+      )}
+      onClick={() => {
+        onChange?.(toggleVote(value, allowTentativeVotes));
+      }}
+      ref={ref}
+    >
+      <VoteIcon type={value} animated />
+    </button>
+  );
+});

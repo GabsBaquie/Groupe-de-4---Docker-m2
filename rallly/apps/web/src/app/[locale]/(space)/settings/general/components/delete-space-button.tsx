@@ -1,0 +1,166 @@
+"use client";
+
+import { mutationOptions } from "@next-safe-action/adapter-tanstack-query";
+import { passwordManagerIgnoreProps } from "@rallly/ui";
+import { Button } from "@rallly/ui/button";
+import type { DialogProps } from "@rallly/ui/dialog";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@rallly/ui/dialog";
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@rallly/ui/form";
+import { Input } from "@rallly/ui/input";
+import { toast } from "@rallly/ui/sonner";
+import { useMutation } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
+import { useForm } from "react-hook-form";
+
+import { deleteSpaceAction } from "@/features/space/actions";
+import { Trans, useTranslation } from "@/i18n/client";
+
+interface DeleteSpaceDialogProps extends DialogProps {
+  spaceName: string;
+}
+
+function DeleteSpaceDialog({
+  spaceName,
+  children,
+  ...rest
+}: DeleteSpaceDialogProps) {
+  const form = useForm<{ spaceName: string }>({
+    defaultValues: {
+      spaceName: "",
+    },
+  });
+
+  const router = useRouter();
+  const { t } = useTranslation();
+
+  const deleteSpace = useMutation(
+    mutationOptions(deleteSpaceAction, {
+      onSuccess: () => {
+        toast.success(
+          t("deletedSpaceSuccess", {
+            defaultValue: "Space has been permanently deleted",
+          }),
+        );
+        router.push("/");
+      },
+    }),
+  );
+
+  return (
+    <Form {...form}>
+      <Dialog {...rest}>
+        {children}
+        <DialogContent>
+          <form
+            onSubmit={form.handleSubmit(() => {
+              deleteSpace.mutate();
+            })}
+          >
+            <DialogHeader>
+              <DialogTitle>
+                <Trans
+                  i18nKey="deleteSpaceDialogTitle"
+                  defaults="Delete space"
+                />
+              </DialogTitle>
+              <DialogDescription>
+                <Trans
+                  i18nKey="deleteSpaceDialogDescription"
+                  defaults="This will permanently delete the space and all polls inside it. This action cannot be undone."
+                />
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <FormField
+                control={form.control}
+                name="spaceName"
+                rules={{
+                  validate: (value) => {
+                    if (value !== spaceName) {
+                      return t("spaceNameMismatch", {
+                        defaultValue: "Space name does not match",
+                      });
+                    }
+                    return true;
+                  },
+                }}
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>
+                      <Trans
+                        i18nKey="deleteSpaceConfirmLabel"
+                        defaults="Confirm space name"
+                      />
+                    </FormLabel>
+                    <FormDescription>
+                      <Trans
+                        i18nKey="deleteSpaceInstruction"
+                        defaults="Please type the space name to confirm:"
+                        values={{ spaceName }}
+                      />
+                    </FormDescription>
+                    <FormControl>
+                      <Input
+                        autoComplete="off"
+                        {...passwordManagerIgnoreProps}
+                        placeholder={spaceName}
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+            <DialogFooter>
+              <DialogClose render={<Button />}>
+                <Trans i18nKey="cancel" defaults="Cancel" />
+              </DialogClose>
+              <Button
+                type="submit"
+                loading={deleteSpace.isPending}
+                variant="destructive"
+              >
+                <Trans
+                  i18nKey="deleteSpacePermanently"
+                  defaults="Delete space permanently"
+                />
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </Form>
+  );
+}
+
+interface DeleteSpaceButtonProps {
+  spaceName: string;
+}
+
+export function DeleteSpaceButton({ spaceName }: DeleteSpaceButtonProps) {
+  return (
+    <DeleteSpaceDialog spaceName={spaceName}>
+      <DialogTrigger render={<Button className="text-destructive" />}>
+        <Trans i18nKey="deleteSpace" defaults="Delete space" />
+      </DialogTrigger>
+    </DeleteSpaceDialog>
+  );
+}

@@ -1,0 +1,36 @@
+{
+  "short_name": "Rallly",
+  "name": "Rallly",
+  "icons": [
+    {
+      "src": "android-chrome-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "android-chrome-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "screenshots/home.webp",
+      "sizes": "1280x720",
+      "type": "image/webp",
+      "form_factor": "wide",
+      "label": "Home screen"
+    },
+    {
+      "src": "screenshots/poll.webp",
+      "sizes": "1280x720",
+      "type": "image/webp",
+      "label": "Poll screen"
+    }
+  ],
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#FFFFFF",
+  "theme_color": "#4f46e5"
+}

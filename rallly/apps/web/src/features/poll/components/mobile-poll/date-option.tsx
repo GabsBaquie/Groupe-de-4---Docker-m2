@@ -1,0 +1,30 @@
+import type * as React from "react";
+
+import type { PollOptionProps } from "./poll-option";
+import PollOption from "./poll-option";
+
+export interface DateOptionProps extends PollOptionProps {
+  dow: string;
+  day: string;
+  month: string;
+}
+
+const DateOption: React.FunctionComponent<DateOptionProps> = ({
+  dow,
+  day,
+  ...rest
+}) => {
+  return (
+    <PollOption {...rest}>
+      {/**
+       * Intentionally using the month prop for the day of week here as a temporary measure
+       * until we update this component.
+       */}
+      <div className="text-sm">
+        {day} {dow}
+      </div>
+    </PollOption>
+  );
+};
+
+export default DateOption;

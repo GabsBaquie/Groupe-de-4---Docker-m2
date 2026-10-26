@@ -1,0 +1,29 @@
+export function AuthPageContainer({ children }: { children: React.ReactNode }) {
+  return <div className="space-y-8">{children}</div>;
+}
+
+export function AuthPageHeader({ children }: { children: React.ReactNode }) {
+  return <div className="text-center">{children}</div>;
+}
+
+export function AuthPageTitle({ children }: { children: React.ReactNode }) {
+  return <h1 className="font-semibold text-2xl">{children}</h1>;
+}
+
+export function AuthPageDescription({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return <p className="mt-2 text-muted-foreground">{children}</p>;
+}
+
+export function AuthPageContent({ children }: { children: React.ReactNode }) {
+  return <div className="space-y-4">{children}</div>;
+}
+
+export function AuthPageExternal({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="px-4 py-3 text-center text-muted-foreground">{children}</p>
+  );
+}

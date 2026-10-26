@@ -1,0 +1,51 @@
+import type { VariantProps } from "class-variance-authority";
+import { cva } from "class-variance-authority";
+import type * as React from "react";
+
+import { cn } from "./lib/utils";
+
+const badgeVariants = cva(
+  "group inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-lg font-normal transition-colors focus:outline-hidden focus:ring-2 focus:ring-ring focus:ring-offset-2",
+  {
+    variants: {
+      variant: {
+        primary: "bg-primary text-primary-foreground",
+        default: "bg-gray-100 text-muted-foreground dark:bg-gray-800",
+        destructive:
+          "bg-rose-600/10 text-rose-600 dark:bg-rose-500/10 dark:text-rose-500",
+        outline: "text-foreground",
+        green:
+          "bg-green-400/10 text-green-600 dark:bg-green-500/10 dark:text-green-500",
+        pink: "bg-pink-400/10 text-pink-600 dark:bg-pink-500/10 dark:text-pink-400",
+        amber:
+          "bg-amber-400/10 text-amber-700 dark:bg-amber-500/10 dark:text-amber-500",
+        secondary: "bg-primary/10 text-primary",
+        pill: "rounded-full bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-200",
+      },
+      size: {
+        sm: "h-5 min-w-5 px-1.5 text-xs",
+        md: "h-6 min-w-5 px-2 text-xs",
+        lg: "h-7 min-w-7 px-2.5 text-sm",
+      },
+    },
+    defaultVariants: {
+      size: "md",
+      variant: "default",
+    },
+  },
+);
+
+export interface BadgeProps
+  extends React.HTMLAttributes<HTMLDivElement>,
+    VariantProps<typeof badgeVariants> {}
+
+function Badge({ className, variant, size, ...props }: BadgeProps) {
+  return (
+    <div
+      className={cn(badgeVariants({ variant, size }), className)}
+      {...props}
+    />
+  );
+}
+
+export { Badge, badgeVariants };

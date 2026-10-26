@@ -1,0 +1,249 @@
+name: CI
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  type-check:
+    name: Type check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-node
+      - uses: ./.github/actions/pnpm-install
+
+      - name: Generate Prisma Client
+        run: pnpm db:generate
+
+      - name: Check types
+        run: pnpm type-check
+
+      # The API reference in apps/docs is generated from the v1 route. A
+      # stale committed spec means an endpoint changed without its docs.
+      - name: Check the committed OpenAPI spec matches the code
+        run: pnpm check:openapi
+
+  sherif:
+    name: Sherif
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-node
+
+      - name: Run sherif
+        run: pnpm dlx sherif@latest
+
+  linting:
+    name: Linting
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-node
+      - uses: ./.github/actions/pnpm-install
+
+      - name: Check linting rules
+        run: pnpm turbo check
+
+      - name: Check feature folder structure
+        run: pnpm check:structure
+
+      - name: Check locale files for unbalanced braces
+        run: pnpm check:locales
+
+      - name: Check User cascade relations are covered by the guest purge
+        run: pnpm check:cascades
+
+  unit-tests:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-node
+      - uses: ./.github/actions/pnpm-install
+
+      - name: Generate Prisma Client
+        run: pnpm db:generate
+
+      - name: Run tests
+        run: pnpm test:unit
+
+  docker-smoke-test:
+    name: Docker smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Shell exports don't reach the container — compose only forwards
+      # DATABASE_URL. The env_file (apps/web/.env) is how the stack reads
+      # config, so write the documented-required variables there.
+      - name: Start services
+        run: |
+          cat > apps/web/.env <<'EOF'
+          SECRET_PASSWORD=0123456789abcdef0123456789abcdef
+          SUPPORT_EMAIL=support@example.com
+          NEXT_PUBLIC_BASE_URL=http://localhost:3000
+          EOF
+          docker compose up -d --build --wait --wait-timeout 60
+
+      # The image healthcheck hits /api/status, but that endpoint returns
+      # 200 even when the database is unreachable and doesn't touch env
+      # validation — assert both explicitly so a booted-but-broken stack
+      # fails here.
+      - name: Check status endpoint and login page respond
+        run: |
+          status=$(curl -fsS --connect-timeout 5 --max-time 15 \
+            http://localhost:3000/api/status)
+          echo "$status"
+          echo "$status" | jq -e '.database == "connected"'
+          curl -fsSL --connect-timeout 5 --max-time 15 \
+            -o /dev/null http://localhost:3000/login
+
+      - uses: ./.github/actions/setup-node
+      - uses: ./.github/actions/pnpm-install
+
+      - name: Install Playwright browser
+        run: pnpm --filter @rallly/web exec playwright install --with-deps chromium
+
+      # A crashed client bundle still serves 200s; only a browser loading
+      # the page catches that class of failure.
+      - name: Run browser smoke test against the image
+        run: pnpm --filter @rallly/web exec playwright test --config playwright.smoke.config.ts
+
+      - name: Show logs on failure
+        if: failure()
+        run: docker compose logs
+
+  # Resolves the @playwright/test version from the lockfile so the container
+  # image tag below stays in sync with it automatically.
+  playwright-version:
+    name: Resolve Playwright version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: resolve
+        run: |
+          version=$(awk "/'@playwright\/test':/{getline; getline; if(\$1==\"version:\"){print \$2; exit}}" pnpm-lock.yaml)
+          if [ -z "$version" ]; then
+            echo "Could not resolve @playwright/test version from pnpm-lock.yaml" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Resolved Playwright version: $version"
+
+  # Each shard builds for itself: a separate build job adds a whole setup
+  # cycle to the critical path, which costs more than the build. The Turbo
+  # remote cache turns the build into a download when apps/web is unchanged.
+  integration-shard:
+    name: Integration tests (${{ matrix.shard }}/${{ strategy.job-total }})
+    runs-on: ubuntu-latest
+    needs: playwright-version
+    strategy:
+      fail-fast: false
+      matrix:
+        # Shards split by test count in file order, not by time; 6 keeps the
+        # slowest shard near a sixth of the suite.
+        shard: [1, 2, 3, 4, 5, 6]
+    # Uses the Playwright image (browsers preinstalled); tag must stay v<version>-noble.
+    container:
+      image: mcr.microsoft.com/playwright:v${{ needs.playwright-version.outputs.version }}-noble
+    env:
+      # Services are reached by network alias (the job is containerized, so not localhost).
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/rallly
+      DIRECT_DATABASE_URL: postgresql://postgres:postgres@postgres:5432/rallly
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+      MAILPIT_API_URL: http://mailpit:8025/api
+      # Point Playwright at the image's preinstalled browsers (HOME is /github/home in-container).
+      PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
+      CI: true
+    # Each shard gets its own database and mailbox, so the suite's
+    # single-tenant assumptions hold within a shard.
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: rallly
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+      mailpit:
+        image: axllent/mailpit
+        options: >-
+          --health-cmd "wget --no-verbose --tries=1 --spider http://localhost:8025/readyz"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-node
+      - uses: ./.github/actions/pnpm-install
+
+      - name: Generate Prisma Client
+        run: pnpm db:generate
+
+      - name: Create production build
+        run: pnpm turbo build:test --filter=@rallly/web
+        env:
+          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+          TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+
+      - name: Setup database
+        run: pnpm db:deploy
+
+      - name: Run tests
+        # Run directly, not via turbo, so the job env reaches the test process.
+        run: pnpm --filter @rallly/web test:integration --shard=${{ matrix.shard }}/${{ strategy.job-total }}
+
+      - name: Upload blob report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: blob-report-${{ matrix.shard }}
+          path: ./apps/web/blob-report
+          retention-days: 1
+
+  # Keeps the required "Integration tests" check: it passes only when every
+  # shard passed, and merges the shard reports into one HTML report.
+  integration-tests:
+    name: Integration tests
+    runs-on: ubuntu-latest
+    needs: [playwright-version, integration-shard]
+    if: ${{ !cancelled() }}
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: all-blob-reports
+          pattern: blob-report-*
+          merge-multiple: true
+
+      - name: Merge reports
+        if: ${{ hashFiles('all-blob-reports/*') != '' }}
+        run: npx --yes playwright@${{ needs.playwright-version.outputs.version }} merge-reports --reporter html ./all-blob-reports
+
+      - name: Upload artifact playwright-report
+        if: ${{ hashFiles('playwright-report/*') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report
+
+      - name: Fail unless every shard passed
+        if: ${{ needs.integration-shard.result != 'success' }}
+        run: exit 1

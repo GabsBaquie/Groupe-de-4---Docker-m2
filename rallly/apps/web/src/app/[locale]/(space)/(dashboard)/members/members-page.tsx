@@ -1,0 +1,227 @@
+import { subject } from "@casl/ability";
+import {
+  Alert,
+  AlertAction,
+  AlertDescription,
+  AlertTitle,
+} from "@rallly/ui/alert";
+import { InfoIcon, ShieldXIcon, SparklesIcon } from "lucide-react";
+import {
+  EmptyState,
+  EmptyStateDescription,
+  EmptyStateIcon,
+  EmptyStateTitle,
+} from "@/components/empty-state";
+import { Link } from "@/components/link";
+import { ListViewActions } from "@/components/list-view";
+import { defineAbilityForSpace } from "@/features/space/ability";
+import { loadActiveSpace, loadSeatUsage } from "@/features/space/loaders";
+import { defineAbilityForMember } from "@/features/space/member/ability";
+import { emptyMemberContentSummary } from "@/features/space/member/constants";
+import {
+  loadMemberContentSummaries,
+  loadPendingInvites,
+  loadSpaceMembers,
+} from "@/features/space/member/loaders";
+import { loadUser } from "@/features/user/loaders";
+import { Trans } from "@/i18n/client";
+import { IfFeatureEnabled } from "@/lib/feature-flags/client";
+import { isFeatureEnabled } from "@/lib/feature-flags/server";
+import { InviteMemberButton } from "./components/invite-member-button";
+import { MembersList } from "./components/members-list";
+import { PendingInvites } from "./components/pending-invites";
+import { UpgradeToProButton } from "./components/upgrade-to-pro-button";
+
+async function getMemberAbility() {
+  const [user, space] = await Promise.all([loadUser(), loadActiveSpace()]);
+
+  return defineAbilityForMember({
+    user: { id: user.id },
+    space: { id: space.id, ownerId: space.ownerId, role: space.role },
+  });
+}
+
+// Member management is admin only: the sidebar and home tile hide the page
+// from members, and a direct link lands on the denied state below.
+function isSpaceAdmin(space: { role: string }) {
+  return space.role === "admin";
+}
+
+export async function MembersPageActions() {
+  const space = await loadActiveSpace();
+
+  if (
+    !isSpaceAdmin(space) ||
+    defineAbilityForSpace(space).cannot("invite", "Member")
+  ) {
+    return null;
+  }
+
+  const [seatUsage, memberAbility] = await Promise.all([
+    loadSeatUsage(),
+    getMemberAbility(),
+  ]);
+  const availableSeats = Math.max(seatUsage.total - seatUsage.used, 0);
+
+  return (
+    <ListViewActions>
+      <p className="mr-2 hidden text-muted-foreground text-sm sm:block">
+        <Trans
+          i18nKey="seatsAvailable"
+          defaults="{count, plural, =0 {No seats available} one {# seat available} other {# seats available}}"
+          values={{ count: availableSeats }}
+        />
+      </p>
+      <InviteMemberButton
+        disabled={availableSeats <= 0}
+        canCreateInvite={memberAbility.can("create", "SpaceMemberInvite")}
+      />
+    </ListViewActions>
+  );
+}
+
+export async function MembersPageContent() {
+  const space = await loadActiveSpace();
+
+  if (!isSpaceAdmin(space)) {
+    return (
+      <EmptyState className="h-96">
+        <EmptyStateIcon>
+          <ShieldXIcon />
+        </EmptyStateIcon>
+        <EmptyStateTitle>
+          <Trans i18nKey="accessDenied" defaults="Access denied" />
+        </EmptyStateTitle>
+        <EmptyStateDescription>
+          <Trans
+            i18nKey="membersAdminRequired"
+            defaults="Only space admins can manage members."
+          />
+        </EmptyStateDescription>
+      </EmptyState>
+    );
+  }
+
+  const [user, members, seatUsage, memberAbility, contentSummaries] =
+    await Promise.all([
+      loadUser(),
+      loadSpaceMembers(),
+      loadSeatUsage(),
+      getMemberAbility(),
+      loadMemberContentSummaries(),
+    ]);
+
+  const canInviteMembers = defineAbilityForSpace(space).can("invite", "Member");
+  const invites = canInviteMembers ? await loadPendingInvites() : [];
+  const availableSeats = Math.max(seatUsage.total - seatUsage.used, 0);
+  const hasInactiveMembers = space.tier === "hobby" && members.length > 1;
+  const showInactive = isFeatureEnabled("billing") && space.tier === "hobby";
+
+  return (
+    <>
+      <div className="space-y-2 px-4 empty:hidden">
+        {canInviteMembers ? (
+          <PendingInvites
+            invites={invites}
+            canCancelInvite={memberAbility.can("delete", "SpaceMemberInvite")}
+          />
+        ) : null}
+        {canInviteMembers && availableSeats <= 0 ? (
+          <Alert variant="info">
+            <InfoIcon />
+            <AlertDescription>
+              {isFeatureEnabled("billing") ? (
+                <p>
+                  <Trans
+                    i18nKey="noSeatsAvailableAlertBillingDescription"
+                    defaults="Increase the number of seats in this space from the <a>billing page</a>."
+                    components={{
+                      a: (
+                        <Link
+                          className="underline hover:text-foreground"
+                          href="/settings/billing"
+                        />
+                      ),
+                    }}
+                  />
+                </p>
+              ) : (
+                <p>
+                  <Trans
+                    i18nKey="noSeatsAvailableAlertSelfHostedDescription"
+                    defaults="You will need to <a>upgrade</a> to increase the number of seats in this space."
+                    components={{
+                      a: (
+                        <Link
+                          className="underline hover:text-foreground"
+                          prefetch={false}
+                          href="https://support.rallly.co/self-hosting/licensing"
+                        />
+                      ),
+                    }}
+                  />
+                </p>
+              )}
+            </AlertDescription>
+          </Alert>
+        ) : null}
+        <IfFeatureEnabled feature="billing">
+          {hasInactiveMembers ? (
+            <Alert>
+              <InfoIcon />
+              <AlertTitle>
+                <Trans
+                  i18nKey="membersInactiveAlertTitle"
+                  defaults="Members are inactive"
+                />
+              </AlertTitle>
+              <AlertDescription>
+                <Trans
+                  i18nKey="membersInactiveAlertDescription"
+                  defaults="These members lost access when this space's Pro subscription ended. Their seats are kept and access is restored when the space is upgraded again."
+                />
+              </AlertDescription>
+              <AlertAction>
+                <UpgradeToProButton action="reactivate" />
+              </AlertAction>
+            </Alert>
+          ) : null}
+        </IfFeatureEnabled>
+        {!canInviteMembers && !hasInactiveMembers ? (
+          <Alert variant="primary">
+            <SparklesIcon />
+            <AlertDescription>
+              <Trans
+                i18nKey="inviteMembersUpsellDescription"
+                defaults="Invite members to manage polls and events together in this space."
+              />
+            </AlertDescription>
+            <AlertAction>
+              <UpgradeToProButton action="invite" variant="link" />
+            </AlertAction>
+          </Alert>
+        ) : null}
+      </div>
+      <MembersList
+        rows={members.map((member) => ({
+          member,
+          // subject() brands the object it's given in place, which would
+          // make `member` fail React's plain-object check when serialized
+          // as a client component prop — hence the copies.
+          canUpdate: memberAbility.can(
+            "update",
+            subject("SpaceMember", { ...member }),
+          ),
+          canDelete: memberAbility.can(
+            "delete",
+            subject("SpaceMember", { ...member }),
+          ),
+          inactive: showInactive && !member.isOwner,
+          isActor: member.userId === user.id,
+          contentSummary:
+            contentSummaries.get(member.userId) ?? emptyMemberContentSummary,
+        }))}
+      />
+    </>
+  );
+}

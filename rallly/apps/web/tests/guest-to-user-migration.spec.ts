@@ -1,0 +1,100 @@
+import { expect, test } from "@playwright/test";
+import { prisma } from "@rallly/database";
+import { deleteAllMessages } from "@rallly/test-helpers";
+import { LoginPage } from "./login-page";
+import { NewPollPage } from "./new-poll-page";
+import { RegisterPage } from "./register-page";
+
+const testUser = {
+  name: "Test User",
+  email: "testuser@example.com",
+};
+
+test.describe.serial(() => {
+  test.beforeAll(async () => {
+    await deleteAllMessages();
+  });
+
+  test.afterAll(async () => {
+    // Clean up the test user
+    await prisma.user.deleteMany({
+      where: {
+        email: testUser.email,
+      },
+    });
+  });
+
+  test("guest user can create a poll and convert to registered user", async ({
+    page,
+  }) => {
+    // Step 1: Create a poll as guest
+    const newPollPage = new NewPollPage(page);
+    await newPollPage.goto();
+    const pollPage = await newPollPage.create({ name: "Monthly Meetup" });
+    await pollPage.closeShareDialog();
+
+    // Step 2: Navigate to registration (redirects to the combined login page)
+    await page.click("text=Create an account");
+    await expect(page).toHaveURL(/login/);
+
+    // Step 3: Complete registration
+    const registerPage = new RegisterPage(page);
+    await registerPage.register(testUser);
+
+    // Step 4: Setup returns them to the poll, now adopted into their space
+    await expect(
+      page.getByRole("heading", { name: "Monthly Meetup" }),
+    ).toBeVisible();
+    const urlId = page.url().match(/\/poll\/([^/?]+)/)?.[1];
+    expect(urlId).toBeTruthy();
+    const poll = await prisma.poll.findUnique({ where: { id: urlId } });
+    expect(poll?.spaceId).toBeTruthy();
+  });
+
+  test("guest user can create a poll and link it to existing user", async ({
+    page,
+  }) => {
+    // Step 1: Create a poll as guest
+    const newPollPage = new NewPollPage(page);
+    await newPollPage.goto();
+    const pollPage = await newPollPage.create({ name: "Board Meeting" });
+    await pollPage.closeShareDialog();
+    await expect(
+      page.getByRole("heading", { name: "Board Meeting" }),
+    ).toBeVisible();
+    const guestPollId = page.url().match(/\/poll\/([^/?]+)/)?.[1];
+    const guestPoll = await prisma.poll.findUnique({
+      where: { id: guestPollId },
+    });
+    expect(guestPoll?.userId).toBeTruthy();
+
+    // Step 2: Navigate to registration
+    await page.getByRole("link", { name: "Login" }).click();
+    await expect(page).toHaveURL(/login/);
+
+    // Step 3: Complete login
+    const loginPage = new LoginPage(page);
+    await loginPage.login({
+      email: testUser.email,
+    });
+
+    // Step 4: Verify the poll has been linked to the logged-in user
+    await expect(
+      page.getByRole("heading", { name: "Board Meeting" }),
+    ).toBeVisible();
+    const url = page.url();
+    const urlId = url.match(/\/poll\/([^/]+)/)?.[1];
+    expect(urlId).toBeTruthy();
+    const [poll, user] = await Promise.all([
+      prisma.poll.findUnique({ where: { id: urlId } }),
+      prisma.user.findUnique({ where: { email: testUser.email } }),
+    ]);
+    expect(poll?.userId).toBe(user?.id);
+
+    // The guest is removed only once its content has moved
+    const guest = await prisma.user.findUnique({
+      where: { id: guestPoll?.userId ?? "" },
+    });
+    expect(guest).toBeNull();
+  });
+});

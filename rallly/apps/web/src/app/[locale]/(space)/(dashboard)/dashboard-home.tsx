@@ -1,0 +1,234 @@
+import { Tile, TileDescription, TileGrid, TileTitle } from "@rallly/ui/tile";
+import { Trans } from "react-i18next/TransWithoutContext";
+import { HoverPrefetchLink } from "@/components/hover-prefetch-link";
+import {
+  ListView,
+  ListViewContent,
+  ListViewHeader,
+  ListViewTitle,
+  ListViewTitleBar,
+} from "@/components/list-view";
+import {
+  BillingPageIcon,
+  CreatePageIcon,
+  EventPageIcon,
+  MembersPageIcon,
+  PollPageIcon,
+  SettingsPageIcon,
+} from "@/components/page-icons";
+import type { OpenPollUsage } from "@/features/poll/limit/types";
+import { getTranslation } from "@/i18n/server";
+import { isFeatureEnabled } from "@/lib/feature-flags/server";
+import { PasswordSetupAlert } from "./password-setup-alert";
+
+export async function DashboardHome({
+  openPollCount,
+  openPollUsage,
+  upcomingEventCount,
+  memberCount,
+  seatCount,
+  hasNoAccounts,
+  canManageBilling,
+  canManageMembers,
+}: {
+  openPollCount: number;
+  /** The organizer's own usage, which replaces the space-wide count while a limit applies */
+  openPollUsage: OpenPollUsage | null;
+  upcomingEventCount: number;
+  memberCount: number;
+  seatCount: number;
+  hasNoAccounts: boolean;
+  canManageBilling: boolean;
+  canManageMembers: boolean;
+}) {
+  const { t, i18n } = await getTranslation();
+
+  return (
+    <ListView>
+      <ListViewHeader>
+        <ListViewTitleBar>
+          <ListViewTitle>
+            <Trans t={t} i18n={i18n} ns="app" i18nKey="home" defaults="Home" />
+          </ListViewTitle>
+        </ListViewTitleBar>
+      </ListViewHeader>
+      <ListViewContent className="space-y-8 px-4 pt-4 pb-8 md:pl-6">
+        {hasNoAccounts && isFeatureEnabled("emailLogin") ? (
+          <PasswordSetupAlert />
+        ) : null}
+        <div className="space-y-4">
+          <h2 className="text-muted-foreground text-sm">
+            <Trans
+              t={t}
+              i18n={i18n}
+              ns="app"
+              i18nKey="homeActionsTitle"
+              defaults="Actions"
+            />
+          </h2>
+          <TileGrid>
+            <Tile render={<HoverPrefetchLink href="/new" />}>
+              <CreatePageIcon />
+              <TileTitle>
+                <Trans
+                  t={t}
+                  i18n={i18n}
+                  ns="app"
+                  i18nKey="create"
+                  defaults="Create"
+                />
+              </TileTitle>
+            </Tile>
+          </TileGrid>
+        </div>
+        <div className="space-y-4">
+          <h2 className="text-muted-foreground text-sm">
+            <Trans
+              t={t}
+              i18n={i18n}
+              ns="app"
+              i18nKey="content"
+              defaults="Content"
+            />
+          </h2>
+          <TileGrid>
+            <Tile render={<HoverPrefetchLink href="/polls" />}>
+              <PollPageIcon />
+              <TileTitle>
+                <Trans
+                  t={t}
+                  i18n={i18n}
+                  ns="app"
+                  i18nKey="polls"
+                  defaults="Polls"
+                />
+              </TileTitle>
+              <TileDescription>
+                {openPollUsage?.limit != null ? (
+                  <Trans
+                    t={t}
+                    i18n={i18n}
+                    ns="app"
+                    i18nKey="openPollCountOfLimit"
+                    defaults="{openCount} of {limit} open"
+                    values={{
+                      openCount: openPollUsage.openCount,
+                      limit: openPollUsage.limit,
+                    }}
+                  />
+                ) : (
+                  <Trans
+                    t={t}
+                    i18n={i18n}
+                    ns="app"
+                    i18nKey="openPollCount"
+                    defaults="{count, plural, other {# open}}"
+                    values={{ count: openPollCount }}
+                  />
+                )}
+              </TileDescription>
+            </Tile>
+
+            <Tile render={<HoverPrefetchLink href="/events" />}>
+              <EventPageIcon />
+              <TileTitle>
+                <Trans
+                  t={t}
+                  i18n={i18n}
+                  ns="app"
+                  i18nKey="events"
+                  defaults="Events"
+                />
+              </TileTitle>
+              <TileDescription>
+                <Trans
+                  t={t}
+                  i18n={i18n}
+                  ns="app"
+                  i18nKey="upcomingEventCount"
+                  defaults="{count, plural, other {# upcoming}}"
+                  values={{ count: upcomingEventCount }}
+                />
+              </TileDescription>
+            </Tile>
+          </TileGrid>
+        </div>
+        <div className="space-y-4">
+          <h2 className="text-muted-foreground text-sm">
+            <Trans
+              t={t}
+              i18n={i18n}
+              ns="app"
+              i18nKey="manage"
+              defaults="Manage"
+            />
+          </h2>
+          <TileGrid>
+            <Tile render={<HoverPrefetchLink href="/settings/general" />}>
+              <SettingsPageIcon />
+              <TileTitle>
+                <Trans
+                  t={t}
+                  i18n={i18n}
+                  ns="app"
+                  i18nKey="settings"
+                  defaults="Settings"
+                />
+              </TileTitle>
+            </Tile>
+
+            {canManageMembers ? (
+              <Tile render={<HoverPrefetchLink href="/members" />}>
+                <MembersPageIcon />
+                <TileTitle>
+                  <Trans
+                    t={t}
+                    i18n={i18n}
+                    ns="app"
+                    i18nKey="members"
+                    defaults="Members"
+                  />
+                </TileTitle>
+                <TileDescription>
+                  <Trans
+                    t={t}
+                    i18n={i18n}
+                    ns="app"
+                    i18nKey="memberCount"
+                    defaults="{count, plural, =0 {No members} one {1 member} other {# members}}"
+                    values={{ count: memberCount }}
+                  />
+                </TileDescription>
+              </Tile>
+            ) : null}
+
+            {isFeatureEnabled("billing") && canManageBilling ? (
+              <Tile render={<HoverPrefetchLink href="/settings/billing" />}>
+                <BillingPageIcon />
+                <TileTitle>
+                  <Trans
+                    t={t}
+                    i18n={i18n}
+                    ns="app"
+                    i18nKey="billing"
+                    defaults="Billing"
+                  />
+                </TileTitle>
+                <TileDescription>
+                  <Trans
+                    t={t}
+                    i18n={i18n}
+                    ns="app"
+                    i18nKey="seatCount"
+                    defaults="{count, plural, one {# seat} other {# seats}}"
+                    values={{ count: seatCount }}
+                  />
+                </TileDescription>
+              </Tile>
+            ) : null}
+          </TileGrid>
+        </div>
+      </ListViewContent>
+    </ListView>
+  );
+}

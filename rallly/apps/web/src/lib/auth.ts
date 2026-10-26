@@ -1,0 +1,819 @@
+import type { TimeFormat } from "@rallly/database";
+import { prisma } from "@rallly/database";
+import { sendChangeEmailEmail } from "@rallly/emails/templates/change-email";
+import { sendRegisterEmail } from "@rallly/emails/templates/register";
+import { sendResetPasswordEmail } from "@rallly/emails/templates/reset-password";
+import { createLogger } from "@rallly/logger";
+import { absoluteUrl } from "@rallly/utils/absolute-url";
+import type { BetterAuthPlugin } from "better-auth";
+import { APIError, betterAuth } from "better-auth";
+import { prismaAdapter } from "better-auth/adapters/prisma";
+import { createAuthMiddleware, getSessionFromCtx } from "better-auth/api";
+import { nextCookies } from "better-auth/next-js";
+import {
+  admin,
+  anonymous,
+  captcha,
+  emailOTP,
+  genericOAuth,
+  lastLoginMethod,
+} from "better-auth/plugins";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+import { after } from "next/server";
+import { cache } from "react";
+import { getInstanceBranding } from "@/emails/branding";
+import { env } from "@/env";
+import { linkAnonymousUser } from "@/features/auth/mutations";
+import {
+  emailDomain,
+  isEmailBlocked,
+  isTemporaryEmail,
+} from "@/features/auth/utils";
+import { getStripe } from "@/features/billing/service";
+import { isRegistrationOpen } from "@/features/instance-settings/data";
+import { getUserLocaleByEmail } from "@/features/user/data";
+import type { UserDTO } from "@/features/user/schema";
+import { jobTitleFieldSchema } from "@/features/user/schema";
+import { getTranslation } from "@/i18n/server";
+import { getLocale } from "@/i18n/server/get-locale";
+import {
+  CTA_COOKIE_NAME,
+  parseCtaParam,
+  parseRefParam,
+  REF_COOKIE_NAME,
+} from "@/lib/acquisition";
+import {
+  LAST_LOGIN_METHOD_COOKIE_NAME,
+  SESSION_TTL_SECONDS,
+} from "@/lib/auth-config";
+import { hostOnlyCookieCleanup } from "@/lib/auth-plugins/host-only-cookie-cleanup";
+import { redis } from "@/lib/kv";
+import {
+  LOCALE_COOKIE_NAME,
+  LOCALE_COOKIE_OPTIONS,
+} from "@/lib/locale/constants";
+import { isMicrosoftEmailVerified } from "@/lib/oauth/microsoft-claims";
+import { track } from "@/lib/posthog";
+import { getValueByPath } from "@/lib/utils/get-value-by-path";
+
+const kv = redis;
+
+const baseURL = absoluteUrl("/api/better-auth");
+
+const logger = createLogger("auth");
+
+if (env.OIDC_ISSUER_URL) {
+  logger.info(
+    "OIDC_ISSUER_URL is no longer used. You can remove it from your environment variables.",
+  );
+}
+
+// The site key renders the widget and the secret key verifies its tokens;
+// captcha only works with both, so a half-configured pair disables it.
+const isCaptchaEnabled =
+  !!env.TURNSTILE_SECRET_KEY && !!env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
+
+if (!!env.TURNSTILE_SECRET_KEY !== !!env.NEXT_PUBLIC_TURNSTILE_SITE_KEY) {
+  logger.warn(
+    "Captcha is disabled: NEXT_PUBLIC_TURNSTILE_SITE_KEY and TURNSTILE_SECRET_KEY must be set together",
+  );
+}
+
+const oidcRequiredEnv = {
+  OIDC_DISCOVERY_URL: env.OIDC_DISCOVERY_URL,
+  OIDC_CLIENT_ID: env.OIDC_CLIENT_ID,
+  OIDC_CLIENT_SECRET: env.OIDC_CLIENT_SECRET,
+};
+
+const missingOidcEnv = Object.entries(oidcRequiredEnv)
+  .filter(([, value]) => !value)
+  .map(([name]) => name);
+
+if (missingOidcEnv.length > 0 && missingOidcEnv.length < 3) {
+  logger.warn(
+    { missing: missingOidcEnv },
+    `OIDC login is disabled: ${missingOidcEnv.join(", ")} must be set alongside the other OIDC variables`,
+  );
+}
+
+// Conditional plugins are typed as BetterAuthPlugin[] — they don't add user
+// fields so losing their specific types doesn't affect session type inference.
+const conditionalPlugins: BetterAuthPlugin[] = [
+  ...(isCaptchaEnabled && env.TURNSTILE_SECRET_KEY
+    ? [
+        captcha({
+          provider: "cloudflare-turnstile",
+          secretKey: env.TURNSTILE_SECRET_KEY,
+          // Every caller of the OTP send endpoint (combined login/signup
+          // page, event RSVP verification) renders the Turnstile widget and
+          // sends the token via the x-captcha-response header.
+          endpoints: ["/email-otp/send-verification-otp"],
+        }),
+      ]
+    : []),
+  ...(env.OIDC_CLIENT_ID && env.OIDC_CLIENT_SECRET && env.OIDC_DISCOVERY_URL
+    ? [
+        genericOAuth({
+          config: [
+            {
+              providerId: "oidc",
+              discoveryUrl: env.OIDC_DISCOVERY_URL,
+              clientId: env.OIDC_CLIENT_ID,
+              clientSecret: env.OIDC_CLIENT_SECRET,
+              scopes: ["openid", "profile", "email"],
+              redirectURI: absoluteUrl("/api/auth/callback/oidc"),
+              pkce: true,
+              mapProfileToUser(profile) {
+                return {
+                  name: getValueByPath(
+                    profile,
+                    env.OIDC_NAME_CLAIM_PATH,
+                  ) as string,
+                  email: getValueByPath(
+                    profile,
+                    env.OIDC_EMAIL_CLAIM_PATH,
+                  ) as string,
+                  image: getValueByPath(
+                    profile,
+                    env.OIDC_PICTURE_CLAIM_PATH,
+                  ) as string,
+                };
+              },
+            },
+          ],
+        }),
+      ]
+    : []),
+];
+
+const isMultiTenantMicrosoft = [
+  "common",
+  "organizations",
+  "consumers",
+].includes(env.MICROSOFT_TENANT_ID);
+
+export const authLib = betterAuth({
+  appName: env.APP_NAME,
+  secret: env.SECRET_PASSWORD,
+  experimental: {
+    joins: true,
+  },
+  emailAndPassword: {
+    enabled: env.EMAIL_LOGIN_ENABLED !== "false",
+    requireEmailVerification: true,
+    // Accounts are only ever created through a verified OTP, and a password
+    // can only be set from a signed-in session. Leaving the sign-up endpoint
+    // open would let anyone reserve an address with a password before its
+    // owner first logs in, which the OTP login would then inherit.
+    disableSignUp: true,
+    sendResetPassword: async ({ user, url }) => {
+      const locale =
+        (await getUserLocaleByEmail(user.email)) ?? (await getLocale());
+
+      await sendResetPasswordEmail({
+        to: user.email,
+        locale,
+        branding: await getInstanceBranding(),
+        props: { resetLink: url },
+      });
+    },
+    onPasswordReset: async ({ user }) => {
+      // Guests have no credentials, so this is always an identified user.
+      track({ id: user.id, isGuest: false }, { event: "password_reset" });
+    },
+  },
+  emailVerification: {
+    autoSignInAfterVerification: true,
+  },
+  database: prismaAdapter(prisma, {
+    provider: "postgresql",
+    transaction: false, // when set to true, there is an issue where the after() hook is called before the user is actually created in the database
+  }),
+  plugins: [
+    admin(),
+    anonymous({
+      emailDomainName: "rallly.co",
+      generateName: async () => {
+        const { t } = await getTranslation();
+        return t("guest");
+      },
+      // The plugin deletes the guest after onLinkAccount whether or not the
+      // merge worked, and the delete cascades to the guest's polls. Deletion
+      // happens below instead, only once the merge has committed; a guest
+      // whose merge failed keeps its content for support to reassign.
+      disableDeleteAnonymousUser: true,
+      onLinkAccount: async ({ anonymousUser, newUser, ctx }) => {
+        if (newUser.user.id === anonymousUser.user.id) return;
+
+        const { merged } = await linkAnonymousUser(
+          newUser.user.id,
+          anonymousUser.user.id,
+        );
+
+        if (!merged || newUser.user.isAnonymous) return;
+
+        try {
+          await ctx.context.internalAdapter.deleteUser(anonymousUser.user.id);
+        } catch (error) {
+          logger.error(
+            { anonymousUserId: anonymousUser.user.id, error },
+            "Failed to delete anonymous user after linking",
+          );
+        }
+      },
+    }),
+    lastLoginMethod({
+      storeInDatabase: true,
+      cookieName: LAST_LOGIN_METHOD_COOKIE_NAME,
+      // The default resolver only knows password sign-in as "email"; both
+      // OTP verification paths are the same email login to the user.
+      customResolveMethod: (ctx) =>
+        ctx.path === "/sign-in/email-otp" ||
+        ctx.path === "/email-otp/verify-email"
+          ? "email"
+          : null,
+    }),
+    emailOTP({
+      // The "sign-in" OTP type creates an account for an unknown address; the
+      // login page offers it only while registration is on. The control panel
+      // toggle changes at runtime, so the registration setting is enforced in
+      // the user.create hook rather than by this boot-time flag.
+      disableSignUp: false,
+      expiresIn: 15 * 60,
+      resendStrategy: "reuse",
+      overrideDefaultEmailVerification: true,
+      changeEmail: {
+        enabled: true,
+      },
+      async sendVerificationOTP({ email, otp, type }) {
+        // The recipient may not be the requester, so an account's saved
+        // language wins over the device that asked for the code.
+        const locale =
+          (await getUserLocaleByEmail(email)) ?? (await getLocale());
+        const branding = await getInstanceBranding();
+        switch (type) {
+          // We're not actually using the sign-in type anymore since we just we have `autoSignInAfterVerification` enabled.
+          // This lets us keep things a bit simpler since we share the same verification flow for both login and registration.
+          case "sign-in":
+          case "email-verification":
+            after(() =>
+              sendRegisterEmail({
+                to: email,
+                locale,
+                branding,
+                props: { code: otp },
+              }),
+            );
+            break;
+          case "change-email":
+            after(() =>
+              sendChangeEmailEmail({
+                to: email,
+                locale,
+                branding,
+                props: { code: otp },
+              }),
+            );
+            break;
+        }
+      },
+    }),
+    ...conditionalPlugins,
+    hostOnlyCookieCleanup,
+    // Must be last — applies Set-Cookie headers from auth.api calls made in
+    // server actions and route handlers.
+    nextCookies(),
+  ],
+  socialProviders: {
+    google:
+      env.GOOGLE_LOGIN_ENABLED !== "false" &&
+      env.GOOGLE_CLIENT_ID &&
+      env.GOOGLE_CLIENT_SECRET
+        ? {
+            clientId: env.GOOGLE_CLIENT_ID,
+            clientSecret: env.GOOGLE_CLIENT_SECRET,
+            redirectURI: absoluteUrl("/api/auth/callback/google"),
+          }
+        : undefined,
+    microsoft:
+      env.MICROSOFT_LOGIN_ENABLED !== "false" &&
+      env.MICROSOFT_CLIENT_ID &&
+      env.MICROSOFT_CLIENT_SECRET
+        ? {
+            tenantId: env.MICROSOFT_TENANT_ID,
+            clientId: env.MICROSOFT_CLIENT_ID,
+            clientSecret: env.MICROSOFT_CLIENT_SECRET,
+            redirectURI: absoluteUrl("/api/auth/callback/microsoft-entra-id"),
+            // better-auth only reads the verified email lists, which personal
+            // Microsoft accounts do not carry; they are vouched for by
+            // `xms_edov` instead.
+            mapProfileToUser: (profile) => {
+              const emailVerified = isMicrosoftEmailVerified(profile);
+              if (!emailVerified) {
+                // Which claims Microsoft sent decides whether the refusal is
+                // the registration's configuration or the account type.
+                logger.warn(
+                  {
+                    tid: profile.tid,
+                    idp: profile.idp,
+                    hasEmail: !!profile.email,
+                    emailVerifiedClaim: profile.email_verified,
+                    xmsEdov: profile.xms_edov,
+                    verifiedPrimaryCount:
+                      profile.verified_primary_email?.length ?? null,
+                    verifiedSecondaryCount:
+                      profile.verified_secondary_email?.length ?? null,
+                    claims: Object.keys(profile).sort(),
+                  },
+                  "Microsoft sign-in refused: email not vouched for",
+                );
+              }
+              return { emailVerified };
+            },
+          }
+        : undefined,
+  },
+  user: {
+    additionalFields: {
+      timeZone: {
+        type: "string",
+        input: true,
+      },
+      locale: {
+        type: "string",
+        input: true,
+      },
+      timeFormat: {
+        type: "string",
+        input: true,
+        required: false,
+      },
+      weekStart: {
+        type: "number",
+        input: true,
+        required: false,
+      },
+      // `input: true` is what lets the field be written at all — the update
+      // endpoint rejects fields marked otherwise — so it is reachable from
+      // authClient.updateUser too. The validator bounds it there as well as
+      // on the server actions that normally write it, and trims what it
+      // stores: Better-Auth persists the value the validator returns.
+      jobTitle: {
+        type: "string",
+        input: true,
+        required: false,
+        validator: { input: jobTitleFieldSchema },
+      },
+    },
+  },
+  secondaryStorage: kv
+    ? {
+        set: async (key: string, value: string, ttl?: number) => {
+          if (ttl) {
+            await kv.set(key, value, { ex: ttl });
+          } else {
+            await kv.set(key, value);
+          }
+        },
+        get: async (key: string) => kv.get(key),
+        delete: async (key: string) => {
+          await kv.del(key);
+        },
+      }
+    : undefined,
+  rateLimit: {
+    enabled: env.RATE_LIMIT_ENABLED !== "false",
+    storage: redis ? "secondary-storage" : "memory",
+    customRules: {
+      "/email-otp/send-verification-otp": {
+        window: 60 * 60, // 1 hour
+        max: 100,
+      },
+      "/email-otp/request-email-change": {
+        window: 60 * 60, // 1 hour
+        max: 5,
+      },
+    },
+  },
+  account: {
+    accountLinking: {
+      enabled: true,
+      // The OIDC provider is the instance's own directory, and many omit the
+      // email_verified claim. Without trust, a user whose row predates their
+      // first OIDC sign-in (an email login, or a changed subject) is refused.
+      trustedProviders: ["oidc"],
+    },
+    fields: {
+      providerId: "provider",
+      accountId: "providerAccountId",
+      refreshToken: "refresh_token",
+      accessToken: "access_token",
+      idToken: "id_token",
+    },
+  },
+  hooks: {
+    before: createAuthMiddleware(async (ctx) => {
+      if (
+        ctx.path.startsWith("/sign-in") ||
+        ctx.path.startsWith("/email-otp")
+      ) {
+        // The email change endpoints submit the address as `newEmail`
+        const email = (ctx.body?.email ?? ctx.body?.newEmail) as
+          | string
+          | undefined;
+        if (email) {
+          if (isEmailBlocked(email)) {
+            throw new APIError("BAD_REQUEST", {
+              code: "EMAIL_BLOCKED",
+              message:
+                "This email address is not allowed. Please use a different email or contact support.",
+            });
+          }
+          if (isTemporaryEmail(email)) {
+            throw new APIError("BAD_REQUEST", {
+              code: "TEMPORARY_EMAIL_NOT_ALLOWED",
+              message:
+                "Temporary email addresses are not allowed. Please use a different email.",
+            });
+          }
+        }
+
+        // Reject banned users before a verification code goes out — the
+        // admin plugin only enforces bans at session creation, which is
+        // after the OTP email has already been sent. Keyed off `email`
+        // only: the change-email endpoints submit `newEmail` and already
+        // require a session, which a banned user cannot hold.
+        const accountEmail = ctx.body?.email as string | undefined;
+        if (accountEmail) {
+          const user = await prisma.user.findUnique({
+            where: { email: accountEmail },
+            select: { banned: true },
+          });
+          if (user?.banned) {
+            throw new APIError("FORBIDDEN", {
+              code: "BANNED_USER",
+              message: "You have been banned from this application",
+            });
+          }
+        }
+      }
+    }),
+    after: createAuthMiddleware(async (ctx) => {
+      // Locale cookie writes go through better-auth's response
+      // (ctx.setCookie), never next/headers: mutating Next's cookie store
+      // makes Next rebuild this handler's Set-Cookie headers through a
+      // name-keyed map, which collapses the duplicate-name session cookies
+      // that crossSubDomainCookies + hostOnlyCookieCleanup produce and
+      // drops the real one. And it must happen in this hook rather than a
+      // database hook: create.after runs after the transaction, once the
+      // response cookies can no longer be changed.
+      if (ctx.path === "/sign-out") {
+        const returned = ctx.context.returned as
+          | { success?: boolean }
+          | undefined;
+
+        // The locale cookie projects the signed-out user's preference;
+        // revert to accept-language for whoever uses this device next.
+        if (returned?.success === true) {
+          ctx.setCookie(LOCALE_COOKIE_NAME, "", {
+            ...LOCALE_COOKIE_OPTIONS,
+            maxAge: 0,
+          });
+        }
+        return;
+      }
+
+      // A new session in the response means the user just signed in:
+      // adopt their saved language on this device.
+      const newSessionUser = ctx.context.newSession?.user as
+        | { locale?: string | null }
+        | undefined;
+      if (newSessionUser?.locale) {
+        ctx.setCookie(
+          LOCALE_COOKIE_NAME,
+          newSessionUser.locale,
+          LOCALE_COOKIE_OPTIONS,
+        );
+      }
+
+      if (
+        ctx.path !== "/email-otp/request-email-change" &&
+        ctx.path !== "/email-otp/change-email"
+      ) {
+        return;
+      }
+
+      const returned = ctx.context.returned as
+        | { success?: boolean }
+        | undefined;
+
+      if (returned?.success !== true) {
+        return;
+      }
+
+      const path = ctx.path;
+      const newEmail = (ctx.body?.newEmail as string).toLowerCase();
+
+      // Run side effects after the response so they can't fail or delay an
+      // email change that Better-Auth has already accepted.
+      after(async () => {
+        try {
+          const session = await getSessionFromCtx(ctx);
+
+          if (!session) {
+            return;
+          }
+
+          if (path === "/email-otp/request-email-change") {
+            // Email changes are only available to registered users. Event
+            // properties are immutable and outlive the person, so only the
+            // domain relationship is recorded here; the address itself lives
+            // on the person profile, which erasure removes.
+            track(
+              { id: session.user.id, isGuest: false },
+              {
+                event: "account_email_change_request",
+                properties: {
+                  domain_changed:
+                    emailDomain(session.user.email) !== emailDomain(newEmail),
+                },
+              },
+            );
+            return;
+          }
+
+          const user = await prisma.user.findUnique({
+            where: { id: session.user.id },
+            select: { customerId: true },
+          });
+
+          if (user?.customerId) {
+            try {
+              await getStripe().customers.update(user.customerId, {
+                email: newEmail,
+              });
+            } catch (error) {
+              logger.error(
+                { error },
+                "Failed to update Stripe customer email after email change",
+              );
+            }
+          }
+
+          track(
+            { id: session.user.id, isGuest: false },
+            {
+              event: "account_email_change_complete",
+              properties: {
+                $set: {
+                  email: newEmail,
+                },
+              },
+            },
+          );
+        } catch (error) {
+          logger.error({ error }, "Failed to run email change side effects");
+        }
+      });
+    }),
+  },
+  databaseHooks: {
+    user: {
+      create: {
+        // On a multi-tenant Microsoft endpoint any tenant admin can put any
+        // address on a user, so an unverified address must not become an
+        // account: the mailbox owner's later OTP login would land in it with
+        // the Microsoft link intact. Microsoft only vouches when the app
+        // registration requests the verified email claims, so an unverified
+        // user here means the registration is unconfigured or Microsoft
+        // declined. Single-tenant Microsoft is the instance's own directory;
+        // OIDC likewise; Google always asserts email_verified.
+        before: async (user, ctx) => {
+          if (user.isAnonymous) {
+            return;
+          }
+          // Registration policy: every path that mints an account (OTP
+          // sign-in, social and OIDC callbacks, the ID-token variant of
+          // /sign-in/social) converges here, so this is where "registration
+          // is off" is enforced. Same shape better-auth documents for
+          // SIGNUP_DISABLED.
+          if (!(await isRegistrationOpen())) {
+            throw new APIError("BAD_REQUEST", {
+              code: "SIGNUP_DISABLED",
+              message: "Signup is disabled",
+            });
+          }
+          // The redirect callback names the provider in the route; the
+          // ID-token variant of /sign-in/social names it in the body.
+          const provider = ctx?.params?.id ?? ctx?.body?.provider;
+          if (
+            user.emailVerified ||
+            provider !== "microsoft" ||
+            !isMultiTenantMicrosoft
+          ) {
+            return;
+          }
+          throw new APIError("FORBIDDEN", {
+            code: "EMAIL_NOT_VERIFIED",
+            message: "email not verified",
+          });
+        },
+        after: async (user, ctx) => {
+          if (user.isAnonymous) {
+            return;
+          }
+          const ref = parseRefParam(ctx?.getCookie(REF_COOKIE_NAME));
+          const cta = parseCtaParam(ctx?.getCookie(CTA_COOKIE_NAME));
+          // No space is created here — /setup owns space creation, and the
+          // active-space gate keeps redirecting there until it happens.
+          track(
+            { id: user.id, isGuest: false },
+            {
+              event: "register",
+              properties: {
+                method: user.lastLoginMethod,
+                ref,
+                cta,
+                $set: {
+                  name: user.name,
+                  email: user.email,
+                  tier: "hobby",
+                  timeZone: user.timeZone ?? undefined,
+                  locale: user.locale ?? undefined,
+                },
+                ...((ref || cta) && {
+                  $set_once: {
+                    ...(ref && { initial_ref: ref }),
+                    ...(cta && { initial_cta: cta }),
+                  },
+                }),
+              },
+            },
+          );
+        },
+      },
+    },
+    session: {
+      create: {
+        after: async (session) => {
+          after(async () => {
+            const user = await prisma.user
+              .update({
+                where: { id: session.userId },
+                data: { lastSeenAt: new Date() },
+                select: { isAnonymous: true, lastLoginMethod: true },
+              })
+              .catch((error) => {
+                logger.error(
+                  { error, userId: session.userId },
+                  "Failed to update lastSeenAt",
+                );
+                return null;
+              });
+
+            // Anonymous users shouldn't trigger login events or create person profiles.
+            if (user && !user.isAnonymous) {
+              track(
+                { id: session.userId, isGuest: false },
+                {
+                  event: "login",
+                  properties: { method: user.lastLoginMethod },
+                },
+              );
+            }
+          });
+        },
+      },
+      update: {
+        after: async (session) => {
+          after(() =>
+            prisma.user
+              .update({
+                where: { id: session.userId },
+                data: { lastSeenAt: new Date() },
+              })
+              .catch((error) => {
+                logger.error(
+                  { error, userId: session.userId },
+                  "Failed to update lastSeenAt",
+                );
+                return null;
+              }),
+          );
+        },
+      },
+    },
+  },
+  session: {
+    expiresIn: SESSION_TTL_SECONDS,
+    updateAge: 60 * 60 * 24, // 1 day
+    cookieCache: {
+      enabled: true,
+      maxAge: 5 * 60, // 5 minutes
+    },
+  },
+  advanced: env.NEXT_PUBLIC_COOKIE_DOMAIN
+    ? {
+        crossSubDomainCookies: {
+          enabled: true,
+          domain: env.NEXT_PUBLIC_COOKIE_DOMAIN,
+        },
+      }
+    : undefined,
+  trustedOrigins: [absoluteUrl()],
+  baseURL,
+});
+
+export type Auth = typeof authLib;
+
+const parseTimeFormat = (value: unknown): TimeFormat | undefined =>
+  value === "hours12" || value === "hours24" ? value : undefined;
+
+export type SessionData = {
+  user: UserDTO;
+  expires: string;
+  updatedAt: string;
+};
+
+/**
+ * "Couldn't read the session" (session store unreachable, transient
+ * failure) is not the same as "there is no session". Redirect guards must
+ * not treat an error as either logged-in or logged-out — reacting to an
+ * unknown state is what turns a transient failure into a redirect loop
+ * between / and /login.
+ */
+export type SessionState =
+  | { status: "authenticated"; session: SessionData }
+  | { status: "unauthenticated" }
+  | { status: "error" };
+
+export const getSessionState = cache(async (): Promise<SessionState> => {
+  try {
+    const session = await authLib.api.getSession({
+      headers: await headers(),
+    });
+
+    if (session) {
+      const user: UserDTO = {
+        id: session.user.id,
+        email: session.user.email,
+        name: session.user.name,
+        isGuest: !!session.user.isAnonymous,
+        image: session.user.image ?? undefined,
+        role: session.user.role === "admin" ? "admin" : "user",
+        banned: !!session.user.banned,
+        locale: session.user.locale ?? undefined,
+        timeZone: session.user.timeZone || undefined,
+        timeFormat: parseTimeFormat(session.user.timeFormat),
+        weekStart: session.user.weekStart ?? undefined,
+      };
+
+      return {
+        status: "authenticated",
+        session: {
+          user,
+          expires: session.session.expiresAt.toISOString(),
+          updatedAt: session.session.updatedAt.toISOString(),
+        },
+      };
+    }
+  } catch (e) {
+    logger.error({ error: e }, "Failed to get session");
+    return { status: "error" };
+  }
+
+  return { status: "unauthenticated" };
+});
+
+/**
+ * Session-or-null view for callers where an unreadable session can safely
+ * degrade to "no session" (optional personalization, public reads). Guards
+ * that redirect or gate access should use getSessionState instead.
+ */
+export const getSession = async () => {
+  const state = await getSessionState();
+  return state.status === "authenticated" ? state.session : null;
+};
+
+export const signOut = async () => {
+  await authLib.api.signOut({
+    headers: await headers(),
+  });
+};
+
+export const getUserIdIfLoggedIn = async () => {
+  const session = await getSession();
+  return session?.user?.isGuest ? undefined : session?.user?.id;
+};
+
+export const redirectIfLoggedIn = async () => {
+  const state = await getSessionState();
+  // On "error" the session is unknown — render the page rather than
+  // redirect, so a transient session-store failure can't feed a loop.
+  if (state.status === "authenticated" && !state.session.user.isGuest) {
+    redirect("/");
+  }
+};
+
+export default authLib;

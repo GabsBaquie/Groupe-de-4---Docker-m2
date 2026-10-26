@@ -1,0 +1,170 @@
+import { prisma } from "@rallly/database";
+import { TRPCError } from "@trpc/server";
+import { isQuickCreateEnabled } from "@/features/quick-create/constants";
+import { getActiveSpaceForUser } from "@/features/space/data";
+import { createSpaceContentScope } from "@/features/space/utils";
+import { createUserDTO } from "@/features/user/data";
+import { signOut } from "@/lib/auth";
+import { AppError } from "@/lib/errors/app-error";
+import { isMaintenanceActiveForRequest } from "@/lib/maintenance-server";
+import { t } from "./init";
+
+export const router = t.router;
+
+export const middleware = t.middleware;
+
+const maintenanceGuard = t.middleware(async ({ next }) => {
+  if (await isMaintenanceActiveForRequest()) {
+    throw new TRPCError({
+      code: "SERVICE_UNAVAILABLE",
+      message: "The app is down for maintenance",
+    });
+  }
+
+  return next();
+});
+
+// Reads trust the session (cookie cache) without hitting the database.
+// Mutations verify the user still exists and run with a fresh DTO; if the
+// user is gone, the session is revoked so the client can't keep bouncing
+// between the login page and pages that require an account.
+const mutationSessionGuard = t.middleware(async ({ ctx, type, next }) => {
+  if (type !== "mutation" || !ctx.user) {
+    return next();
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: ctx.user.id },
+  });
+
+  if (!user) {
+    try {
+      await signOut();
+    } catch {
+      // The UNAUTHORIZED error below must be thrown regardless
+    }
+    throw new TRPCError({
+      code: "UNAUTHORIZED",
+      message: "Your session is no longer valid",
+      cause: new AppError({
+        code: "INVALID_SESSION",
+        message: "Session references a user that no longer exists",
+      }),
+    });
+  }
+
+  return next({
+    ctx: {
+      user: createUserDTO(user),
+    },
+  });
+});
+
+export const publicProcedure = t.procedure
+  .use(maintenanceGuard)
+  .use(mutationSessionGuard);
+
+export const possiblyPublicProcedure = publicProcedure.use(
+  middleware(async ({ ctx, next }) => {
+    // These procedures are public if Quick Create is enabled
+    const isGuest = !ctx.user || ctx.user.isGuest;
+    if (isGuest && !isQuickCreateEnabled) {
+      throw new TRPCError({
+        code: "UNAUTHORIZED",
+        message: "Login is required",
+      });
+    }
+
+    return next();
+  }),
+);
+
+// This procedure guarantees that a user will exist in the context
+export const requireUserMiddleware = middleware(async ({ ctx, next }) => {
+  if (!ctx.user) {
+    throw new TRPCError({
+      code: "UNAUTHORIZED",
+      message: "This method requires a user",
+    });
+  }
+
+  if (ctx.user.banned) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Your account has been banned",
+    });
+  }
+
+  return next({
+    ctx: {
+      user: ctx.user,
+    },
+  });
+});
+
+export const privateProcedure = publicProcedure.use(async ({ ctx, next }) => {
+  if (!ctx.user || ctx.user.isGuest !== false) {
+    throw new TRPCError({
+      code: "UNAUTHORIZED",
+      message: "Login is required",
+    });
+  }
+
+  return next({
+    ctx: {
+      user: ctx.user,
+    },
+  });
+});
+
+export const adminProcedure = privateProcedure.use(async ({ ctx, next }) => {
+  // ctx.user comes from the session cookie cache, which can hold a stale
+  // role — admin access must be authorized against the database.
+  const user = await prisma.user.findUnique({
+    where: { id: ctx.user.id },
+    select: { role: true },
+  });
+
+  if (user?.role !== "admin") {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Admin access required",
+    });
+  }
+
+  return next();
+});
+
+export const spaceProcedure = privateProcedure.use(async ({ ctx, next }) => {
+  const space = await getActiveSpaceForUser(ctx.user.id);
+
+  if (!space) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "No active space found",
+    });
+  }
+
+  return next({
+    ctx: {
+      space,
+      // Visibility scope space-scoped content reads must apply for this
+      // member — restricts members of "independently" spaces to their own
+      // content, regardless of role.
+      contentScope: createSpaceContentScope({ space, userId: ctx.user.id }),
+    },
+  });
+});
+
+export const spaceOwnerProcedure = spaceProcedure.use(async ({ ctx, next }) => {
+  if (ctx.space.ownerId !== ctx.user.id) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Only the space owner can perform this action",
+    });
+  }
+
+  return next();
+});
+
+export const mergeRouters = t.mergeRouters;

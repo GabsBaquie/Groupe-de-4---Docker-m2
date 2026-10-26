@@ -1,0 +1,188 @@
+model Space {
+  id                         String     @id @default(uuid())
+  name                       String
+  image                      String?
+  ownerId                    String     @map("owner_id")
+  tier                       SpaceTier  @default(hobby)
+  spaceType                  SpaceType? @map("space_type")
+  // Self-declared sector, optional. Stored as a string rather than an enum
+  // because the taxonomy is expected to change; validation lives in
+  // features/space/schema.ts.
+  industry                   String?
+  primaryColor               String?    @map("primary_color")
+  showBranding               Boolean    @default(false) @map("show_branding")
+  hideAttribution            Boolean    @default(false) @map("hide_attribution")
+  // The Team collaboration setting (Settings -> Collaboration).
+  // Whether members share everything they create (everyone sees
+  // everything) or work independently (everyone, admins included, only
+  // sees what they create; roles grant administrative capabilities, not
+  // visibility). Defaults to not shared — sharing is opt-in; the backfill
+  // kept existing multi-member spaces shared to preserve their behavior.
+  // When the org layer lands, shared
+  // spaces map to teams and unshared spaces to organizations.
+  shared                     Boolean    @default(false)
+  // Set by hand when support grants the nonprofit discount; checkout applies
+  // the coupon from this. An existing subscription gets it in Stripe.
+  nonprofitDiscountGrantedAt DateTime?  @map("nonprofit_discount_granted_at")
+  createdAt                  DateTime   @default(now()) @map("created_at")
+  updatedAt                  DateTime   @updatedAt @map("updated_at")
+
+  owner           User             @relation("UserSpaces", fields: [ownerId], references: [id], onDelete: Cascade)
+  polls           Poll[]
+  scheduledEvents ScheduledEvent[]
+  eventTypes      EventType[]
+  sheets          Sheet[]
+  subscriptions   Subscription[]   @relation("SpaceToSubscription")
+
+  members SpaceMember[]
+
+  memberInvites SpaceMemberInvite[]
+
+  apiKeys SpaceApiKey[]
+
+  nonprofitApplications NonprofitApplication[]
+
+  webhooks SpaceWebhook[]
+
+  @@index([ownerId])
+  @@map("spaces")
+}
+
+enum SpaceMemberRole {
+  ADMIN
+  MEMBER
+}
+
+enum SpaceType {
+  personal
+  work
+
+  @@map("space_types")
+}
+
+enum SpaceTier {
+  hobby
+  pro
+
+  @@map("space_tiers")
+}
+
+model SpaceMember {
+  id             String          @id @default(uuid())
+  spaceId        String          @map("space_id")
+  userId         String          @map("user_id")
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+  role           SpaceMemberRole @default(MEMBER)
+  lastSelectedAt DateTime        @default(now()) @map("last_selected_at")
+
+  space Space @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([spaceId, userId])
+  @@index([userId])
+  @@map("space_members")
+}
+
+model SpaceMemberInvite {
+  id        String          @id @default(uuid())
+  spaceId   String          @map("space_id")
+  email     String
+  createdAt DateTime        @default(now()) @map("created_at")
+  updatedAt DateTime        @updatedAt @map("updated_at")
+  role      SpaceMemberRole @default(MEMBER)
+  inviterId String          @map("inviter_id")
+
+  invitedBy User  @relation(fields: [inviterId], references: [id], onDelete: Cascade)
+  space     Space @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@unique([spaceId, email])
+  @@map("space_member_invites")
+}
+
+model SpaceApiKey {
+  id        String @id @default(cuid())
+  spaceId   String @map("space_id")
+  name      String
+  prefix    String @unique
+  hashedKey String @map("hashed_key") @db.Text
+
+  lastUsedAt DateTime? @map("last_used_at")
+  expiresAt  DateTime? @map("expires_at")
+  revokedAt  DateTime? @map("revoked_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  space Space @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@index([spaceId], name: "space_api_key_space_idx")
+  @@index([expiresAt], name: "space_api_key_expires_idx")
+  @@index([revokedAt], name: "space_api_key_revoked_idx")
+  @@map("space_api_keys")
+}
+
+model SpaceWebhook {
+  id      String   @id @default(cuid())
+  spaceId String   @map("space_id")
+  url     String
+  /// AES-256-GCM under SECRET_PASSWORD (see @rallly/utils/encryption); the plaintext is shown once at creation
+  secret  String
+  /// Subscribed event names (`poll.closed`, ...); validated by the feature schema, not a DB enum, so the vocabulary grows without migrations
+  events  String[]
+  enabled Boolean  @default(true)
+  /// The payload contract this endpoint was built against (WEBHOOK_VERSION at creation). No default: a writer that forgets it fails instead of recording a stale contract. A breaking payload change branches on this so existing endpoints keep their shape
+  version String
+  /// Fan-out position in the poll activity log: activities created after this instant are still to be delivered. Starts at creation so a new endpoint never replays history
+  cursor  DateTime @default(now())
+
+  lastDeliveredAt     DateTime? @map("last_delivered_at")
+  lastFailedAt        DateTime? @map("last_failed_at")
+  /// Exhausted deliveries in a row; reset by any success. The dispatcher disables the endpoint once it reaches its cap
+  consecutiveFailures Int       @default(0) @map("consecutive_failures")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  space      Space             @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  deliveries WebhookDelivery[]
+
+  @@index([spaceId])
+  @@map("space_webhooks")
+}
+
+enum WebhookDeliveryStatus {
+  pending
+  in_flight
+  succeeded
+  failed
+  exhausted
+
+  @@map("webhook_delivery_status")
+}
+
+model WebhookDelivery {
+  id         String @id @default(cuid())
+  webhookId  String @map("webhook_id")
+  /// Soft reference to the PollActivity row this delivery was fanned out from; with webhookId it makes fan-out idempotent
+  activityId String @map("activity_id")
+  eventType  String @map("event_type")
+  /// Frozen at fan-out: retries resend exactly what the first attempt sent
+  payload    Json
+
+  status        WebhookDeliveryStatus @default(pending)
+  attempts      Int                   @default(0)
+  nextAttemptAt DateTime              @default(now()) @map("next_attempt_at")
+
+  lastResponseStatus Int?    @map("last_response_status")
+  lastError          String? @map("last_error")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  webhook SpaceWebhook @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+
+  @@unique([webhookId, activityId])
+  @@index([status, nextAttemptAt])
+  @@map("webhook_deliveries")
+}

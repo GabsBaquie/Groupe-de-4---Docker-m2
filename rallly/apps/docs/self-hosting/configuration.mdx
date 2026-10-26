@@ -1,0 +1,216 @@
+---
+icon: gear
+title: Configuration Options
+description: Environment variables for a self-hosted Rallly instance.
+---
+
+All configuration lives in the `.env` file at the root of your self-hosted stack. The [installer](/self-hosting/installation/docker) writes a starter `.env` for you; edit it directly to change any value. After edits, apply them with `./rallly.sh restart`.
+
+<Note>
+  When using the Rallly CLI, internal wiring (database URL, S3 endpoint, `NEXT_PUBLIC_BASE_URL`) is handled by the Compose stack and derived from the values below — you do not need to set them yourself. If you're running the Rallly Docker image without the CLI, see [Running the image directly](#running-the-image-directly).
+</Note>
+
+## General
+
+<ParamField path="DOMAIN" required>
+  The domain where your instance is served (e.g. `rallly.example.com`). Traefik uses this to request a Let's Encrypt certificate and to route traffic to the app.
+</ParamField>
+
+<ParamField path="ACME_EMAIL" required>
+  Email address for Let's Encrypt certificate notifications (expiry warnings, etc.).
+</ParamField>
+
+<ParamField path="SECRET_PASSWORD" required>
+  A random secret key used to encrypt user sessions. Must be at least 32 characters. Generate one with `openssl rand -base64 32`.
+</ParamField>
+
+<ParamField path="SUPPORT_EMAIL" required>
+  Shown to users as the contact email for support queries.
+</ParamField>
+
+<ParamField path="NOREPLY_EMAIL">
+  Sender address for all transactional emails. Falls back to `SUPPORT_EMAIL` if not set.
+</ParamField>
+
+<ParamField path="NOREPLY_EMAIL_NAME" default="Rallly">
+  Sender name for all transactional emails.
+</ParamField>
+
+<ParamField path="INITIAL_ADMIN_EMAIL">
+  The first user who signs in with this email can claim the admin role from `/control-panel`. See the [Control Panel guide](/self-hosting/control-panel).
+</ParamField>
+
+## Email (SMTP)
+
+An SMTP server is required to send magic-link sign-in emails and notifications.
+
+<ParamField path="SMTP_HOST" required>The host address of your SMTP server</ParamField>
+
+<ParamField path="SMTP_PORT" default="587">
+  Common values: 587 (STARTTLS), 465 (implicit TLS), 25 (plain). Ports 587 and 25 use STARTTLS and require `SMTP_SECURE=false`; port 465 uses implicit TLS and requires `SMTP_SECURE=true`.
+</ParamField>
+
+<ParamField path="SMTP_SECURE" default="false">
+  Set to `true` for implicit TLS (typically port 465). Leave as `false` for STARTTLS (typically port 587), which upgrades a plain connection to TLS after the initial handshake.
+</ParamField>
+
+<ParamField path="SMTP_USER">
+  SMTP username, if authentication is enabled.
+</ParamField>
+
+<ParamField path="SMTP_PWD">
+  SMTP password, if authentication is enabled.
+</ParamField>
+
+<ParamField path="SMTP_REJECT_UNAUTHORIZED" default="true">
+  Validate TLS certificates. Set to `false` to accept self-signed certificates. Not recommended for production.
+
+  <Note>Available from v4.4.0 and later.</Note>
+</ParamField>
+
+<ParamField path="SMTP_TLS_SERVERNAME">
+  Hostname used for TLS certificate validation. Required when `SMTP_HOST` is an IP address or a hostname that only resolves via `/etc/hosts`. See [nodemailer TLS options](https://nodemailer.com/smtp#tls-options).
+
+  <Note>Available from v4.8.0 and later.</Note>
+</ParamField>
+
+<ParamField path="SMTP_DEBUG" deprecated>
+  No longer supported since v4.16.0 and can be removed from your configuration. Send failures are now logged with the SMTP server's response (`errorResponse`, `errorResponseCode`, `errorCommand`), which covers the cases this option was used for. For connection level diagnosis, run `openssl s_client -starttls smtp -connect <host>:<port>` for STARTTLS (`SMTP_SECURE=false`), or `openssl s_client -connect <host>:<port>` for implicit TLS (`SMTP_SECURE=true`, usually port 465).
+</ParamField>
+
+## Auth
+
+<ParamField path="EMAIL_LOGIN_ENABLED" default="true">
+  Set to `false` to disable email sign-in. When disabled, users can only sign in via a configured SSO provider. New users can still register through SSO unless `REGISTRATION_ENABLED` is `false` or registration is disabled in the control panel.
+
+  <Note>Available from v4.4.0 and later.</Note>
+</ParamField>
+
+<ParamField path="REGISTRATION_ENABLED" default="true">
+  Set to `false` to disable new user registration. Takes precedence over the database setting in the admin UI.
+
+  <Note>Available from v4.4.0 and later.</Note>
+</ParamField>
+
+<ParamField path="ALLOWED_EMAILS">
+  Comma-separated list of email addresses allowed to register and sign in. Wildcards are supported. Example: `*@example.com` allows any address on that domain.
+</ParamField>
+
+### Single Sign-On
+
+See the [Single Sign-On guide](/self-hosting/single-sign-on) for setup instructions and the full list of variables.
+
+## Video Conferencing
+
+Google Meet, Zoom, Microsoft Teams and Webex links on polls are turned on per provider with `CONFERENCING_PROVIDERS` and an OAuth app for each. See the [Video Conferencing guide](/self-hosting/conferencing) for setup instructions and the full list of variables.
+
+<Note>Available from v4.16.0 and later.</Note>
+
+## Branding
+
+Customise the look of your instance. These settings can also be changed from the Control Panel, where a saved value takes precedence over the environment variable. See [White Labeling](/self-hosting/white-labeling) for details.
+
+<Note>
+  Available from v4.6.0 and later. Requires an Enterprise license with the white-label add-on.
+</Note>
+
+<ParamField path="APP_NAME" default="Rallly">
+  Application name. Appears in page titles, navigation, and emails.
+</ParamField>
+
+<ParamField path="PRIMARY_COLOR" default="#4f46e5">
+  Primary brand color for light mode. Must be a valid hex code.
+</ParamField>
+
+<ParamField path="PRIMARY_COLOR_DARK">
+  Primary brand color for dark mode. Auto-calculated from `PRIMARY_COLOR` if not set.
+</ParamField>
+
+<ParamField path="LOGO_URL">
+  Absolute URL to your logo for light mode. SVG recommended. Defaults to the Rallly logo.
+</ParamField>
+
+<ParamField path="LOGO_URL_DARK">
+  Absolute URL to your logo for dark mode. Falls back to `LOGO_URL` if not set.
+</ParamField>
+
+<ParamField path="LOGO_ICON_URL">
+  Absolute URL to your logo icon, shown at the top of emails. Defaults to the Rallly logo mark. Use a raster format, as SVG rendering is unreliable across mail clients.
+</ParamField>
+
+<ParamField path="HIDE_ATTRIBUTION" default="false">
+  Set to `true` to hide "Powered by Rallly" attribution in polls and emails.
+</ParamField>
+
+## Advanced
+
+<ParamField path="RALLLY_IMAGE" default="lukevella/rallly:4">
+  Override the Rallly Docker image. Pin a major version (e.g. `lukevella/rallly:4`) to avoid pulling in breaking changes. See the [releases](https://github.com/lukevella/rallly/releases) for available versions.
+</ParamField>
+
+<ParamField path="RATE_LIMIT_ENABLED" default="true">
+  Limits how often one visitor can perform actions such as submitting responses. Counts are kept in memory and reset when the container restarts. Rallly reads the visitor's address from the `X-Real-IP` header, so if you run your own reverse proxy, make sure it sets that header. The bundled proxy does. Set to `false` to turn the limits off.
+</ParamField>
+
+### External reverse proxy
+
+The stack bundles Traefik for TLS termination. To put Rallly behind your own reverse proxy (Nginx, Caddy, Cloudflare Tunnel, etc.), set `PROXY_MODE=external` — the bundled `traefik` container is skipped and the `web` container is published on a host port your proxy can route to. See [External reverse proxy](/self-hosting/installation/docker#external-reverse-proxy) in the installation guide for the full setup.
+
+<ParamField path="PROXY_MODE" default="bundled">
+  Set to `external` to disable the bundled Traefik reverse proxy and publish the `web` container on a host port instead. Your external proxy is responsible for TLS termination.
+</ParamField>
+
+<ParamField path="WEB_PORT" default="127.0.0.1:3000">
+  Host port binding for the `web` container when `PROXY_MODE=external`. Format is `<host>:<port>`. Use `0.0.0.0:3000` to expose on all interfaces, or pick a different port if 3000 is in use.
+</ParamField>
+
+### External database
+
+The stack bundles a PostgreSQL container that works out of the box. Set `DATABASE_URL` in `.env` to point at an external Postgres instead (RDS, Supabase, Neon, etc.) — the bundled `db` container is skipped automatically when this variable is set.
+
+<ParamField path="DATABASE_URL">
+  Postgres connection string. Leave unset to use the bundled database. Example: `postgres://user:password@db.example.com:5432/rallly`.
+</ParamField>
+
+### External object storage
+
+The stack bundles [Garage](https://garagehq.deuxfleurs.fr/) for file uploads, which works out of the box. To use an external S3-compatible service (AWS S3, Cloudflare R2, MinIO, etc.), set the variables below in `.env` — the bundled `garage` container is skipped automatically when `S3_ENDPOINT` points elsewhere.
+
+<ParamField path="S3_ENDPOINT">
+  S3 API endpoint. Leave unset to use the bundled storage. Example: `https://s3.us-east-1.amazonaws.com`.
+</ParamField>
+
+<ParamField path="S3_BUCKET_NAME">
+  Bucket name for uploads.
+</ParamField>
+
+<ParamField path="S3_REGION">
+  Bucket region (e.g. `us-east-1`, `auto` for Cloudflare R2).
+</ParamField>
+
+<ParamField path="S3_ACCESS_KEY_ID">
+  Access key for the bucket.
+</ParamField>
+
+<ParamField path="S3_SECRET_ACCESS_KEY">
+  Secret key for the bucket.
+</ParamField>
+
+### Corporate networks
+
+If outbound traffic from your server must pass through a proxy, or your network intercepts TLS with an internal root CA, see the [Corporate Networks guide](/self-hosting/corporate-networks) for the `HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY` variables and `CA_CERT_FILE`.
+
+## Running the image directly
+
+If you're running the Rallly Docker image without the [Rallly CLI](/self-hosting/installation/docker), a few variables that the CLI normally supplies or derives become your responsibility.
+
+<ParamField path="NEXT_PUBLIC_BASE_URL" required>
+  Fully qualified public URL of your instance, including scheme. Example: `https://rallly.example.com`. The CLI generates this from `DOMAIN`; without the CLI, you must set it explicitly.
+</ParamField>
+
+The variables documented under [External database](#external-database) and [External object storage](#external-object-storage) also become required, since there are no bundled services to fall back to:
+
+- `DATABASE_URL` — Postgres connection string
+- `S3_ENDPOINT`, `S3_BUCKET_NAME`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` — S3-compatible object storage credentials
+
+`DOMAIN` and `ACME_EMAIL` are only used by the bundled Traefik reverse proxy and can be left unset in this mode. TLS termination is your reverse proxy's responsibility.

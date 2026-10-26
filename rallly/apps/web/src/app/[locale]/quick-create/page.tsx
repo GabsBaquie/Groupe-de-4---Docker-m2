@@ -1,0 +1,60 @@
+import { buttonVariants } from "@rallly/ui";
+import { Card } from "@rallly/ui/card";
+import { LogInIcon } from "lucide-react";
+import type { Metadata } from "next";
+import { notFound } from "next/navigation";
+import { Link } from "@/components/link";
+import { QuickCreateWidget } from "@/features/quick-create/components/quick-create-widget";
+import { isQuickCreateEnabled } from "@/features/quick-create/constants";
+import { getTranslation } from "@/i18n/server";
+import { getLocale } from "@/i18n/server/get-locale";
+import { DeviceDateTimeProvider } from "@/lib/datetime/device";
+import { getDeviceDateTimeConfig } from "@/lib/datetime/server";
+
+export default async function QuickCreatePage() {
+  if (!isQuickCreateEnabled) {
+    notFound();
+  }
+
+  const { t } = await getTranslation();
+  const [locale, deviceDateTimeConfig] = await Promise.all([
+    getLocale(),
+    getDeviceDateTimeConfig(),
+  ]);
+
+  return (
+    <DeviceDateTimeProvider
+      locale={locale}
+      timeZone={deviceDateTimeConfig.timeZone}
+      timeFormat={deviceDateTimeConfig.timeFormat}
+    >
+      <main id="main-content" tabIndex={-1} className="flex h-dvh p-2">
+        <Card className="flex flex-1 flex-col gap-6 p-6">
+          <div className="mx-auto w-full max-w-md flex-1">
+            <div className="space-y-8">
+              <div className="flex-1">
+                <QuickCreateWidget />
+              </div>
+            </div>
+          </div>
+          <div className="flex justify-center gap-4">
+            <Link
+              href="/login"
+              className={buttonVariants({ className: "rounded-full" })}
+            >
+              <LogInIcon className="text-muted-foreground" />
+              {t("login")}
+            </Link>
+          </div>
+        </Card>
+      </main>
+    </DeviceDateTimeProvider>
+  );
+}
+
+export async function generateMetadata(): Promise<Metadata> {
+  const { t } = await getTranslation();
+  return {
+    title: t("quickCreate"),
+  };
+}

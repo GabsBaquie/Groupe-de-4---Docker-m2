@@ -1,0 +1,209 @@
+"use client";
+
+import { zodResolver } from "@hookform/resolvers/zod";
+import { mutationOptions } from "@next-safe-action/adapter-tanstack-query";
+import { Alert, AlertDescription } from "@rallly/ui/alert";
+import { Button } from "@rallly/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  useDialog,
+} from "@rallly/ui/dialog";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@rallly/ui/form";
+import { Input } from "@rallly/ui/input";
+import { toast } from "@rallly/ui/sonner";
+import { useMutation } from "@tanstack/react-query";
+import { AlertTriangleIcon, CheckIcon, CopyIcon, PlusIcon } from "lucide-react";
+import React from "react";
+import { useForm } from "react-hook-form";
+import { useCopyToClipboard } from "react-use";
+import { createApiKeyAction } from "@/features/api-keys/actions";
+import { createApiKeySchema } from "@/features/api-keys/schema";
+import { Trans, useTranslation } from "@/i18n/client";
+
+export function CreateApiKeyButton() {
+  const { t } = useTranslation();
+  const dialog = useDialog();
+  const [createdApiKey, setCreatedApiKey] = React.useState<string | null>(null);
+  // The result carries the plaintext key; keep it out of the mutation cache
+  const createApiKey = useMutation(
+    mutationOptions(createApiKeyAction, { gcTime: 0 }),
+  );
+  const [, copy] = useCopyToClipboard();
+  const [didCopy, setDidCopy] = React.useState(false);
+
+  const form = useForm({
+    resolver: zodResolver(createApiKeySchema),
+    defaultValues: {
+      name: "",
+    },
+  });
+
+  const handleClose = () => {
+    dialog.dismiss();
+    createApiKey.reset();
+    setCreatedApiKey(null);
+    form.reset();
+  };
+
+  const handleCopy = () => {
+    if (createdApiKey) {
+      copy(createdApiKey);
+      setDidCopy(true);
+      setTimeout(() => setDidCopy(false), 2000);
+      toast.success(
+        t("copiedToClipboard", {
+          defaultValue: "Copied to clipboard",
+        }),
+      );
+    }
+  };
+
+  return (
+    <>
+      <Button onClick={() => dialog.trigger()}>
+        <PlusIcon data-icon="inline-start" />
+        <Trans i18nKey="createApiKey" defaults="Create API key" />
+      </Button>
+      <Dialog {...dialog.dialogProps} onOpenChange={handleClose}>
+        <DialogContent>
+          {createdApiKey ? (
+            <>
+              <DialogHeader>
+                <DialogTitle>
+                  <Trans i18nKey="apiKeyCreated" defaults="API key created" />
+                </DialogTitle>
+                <DialogDescription>
+                  <Trans
+                    i18nKey="apiKeyCreatedDescription"
+                    defaults="Copy your API key now. You won't be able to see it again."
+                  />
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <Alert variant="warning">
+                  <AlertTriangleIcon />
+                  <AlertDescription>
+                    <Trans
+                      i18nKey="apiKeySecurityWarning"
+                      defaults="Store this key securely. It won't be shown again."
+                    />
+                  </AlertDescription>
+                </Alert>
+                <div className="space-y-2">
+                  <label
+                    htmlFor="created-api-key"
+                    className="font-medium text-sm"
+                  >
+                    <Trans i18nKey="yourApiKey" defaults="Your API key" />
+                  </label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="created-api-key"
+                      value={createdApiKey}
+                      readOnly
+                      className="font-mono text-sm"
+                    />
+                    <Button
+                      aria-label={t("copy", { defaultValue: "Copy" })}
+                      variant="ghost"
+                      size="icon"
+                      onClick={handleCopy}
+                      type="button"
+                    >
+                      {didCopy ? <CheckIcon /> : <CopyIcon />}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button onClick={handleClose}>
+                  <Trans i18nKey="done" defaults="Done" />
+                </Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <>
+              <DialogHeader>
+                <DialogTitle>
+                  <Trans i18nKey="createApiKey" defaults="Create API key" />
+                </DialogTitle>
+                <DialogDescription>
+                  <Trans
+                    i18nKey="createApiKeyDescription"
+                    defaults="Create a new API key for programmatic access to your space"
+                  />
+                </DialogDescription>
+              </DialogHeader>
+              <Form {...form}>
+                <form
+                  onSubmit={form.handleSubmit(async (data) => {
+                    try {
+                      const result = await createApiKey.mutateAsync(data);
+                      if (result.ok) {
+                        setCreatedApiKey(result.apiKey);
+                        form.reset();
+                      } else if (result.reason === "max_api_keys_exceeded") {
+                        toast.error(
+                          t("apiKeyLimitReached", {
+                            defaultValue:
+                              "You've reached the maximum number of API keys. Revoke one before creating another.",
+                          }),
+                        );
+                      }
+                    } catch {}
+                  })}
+                >
+                  <div className="space-y-4">
+                    <FormField
+                      control={form.control}
+                      name="name"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>
+                            <Trans i18nKey="name" defaults="Name" />
+                          </FormLabel>
+                          <FormControl>
+                            <Input
+                              {...field}
+                              placeholder={t("apiKeyNamePlaceholder", {
+                                defaultValue: "My App",
+                              })}
+                              autoFocus
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                  <DialogFooter>
+                    <Button
+                      variant="primary"
+                      type="submit"
+                      disabled={createApiKey.isPending}
+                      loading={createApiKey.isPending}
+                    >
+                      <Trans i18nKey="create" defaults="Create" />
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </Form>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}

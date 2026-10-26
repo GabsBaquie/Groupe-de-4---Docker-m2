@@ -1,0 +1,345 @@
+"use client";
+
+import { Button } from "@rallly/ui/button";
+import {
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+} from "@rallly/ui/dropdown-menu";
+import { FormItem, FormLabel } from "@rallly/ui/form";
+import { Input } from "@rallly/ui/input";
+import { VideoIcon } from "lucide-react";
+import React from "react";
+import { Controller, useFormContext } from "react-hook-form";
+import { Link } from "@/components/link";
+import { ConferencingProviderIcon } from "@/features/conferencing/components/conferencing-provider-icon";
+import type {
+  ConferencingProvider,
+  PollConferencing,
+} from "@/features/conferencing/schema";
+import {
+  conferencingProviderLabels,
+  isProConferencingProvider,
+} from "@/features/conferencing/utils";
+import { Trans, useTranslation } from "@/i18n/client";
+
+export type ConferencingOptions = {
+  // Providers this instance offers, in menu order. A pasted link is always
+  // offered and needs no provider.
+  available: ConferencingProvider[];
+  // Providers the organizer has linked an account for.
+  connected: ConferencingProvider[];
+};
+
+type ConferencingFormValues = {
+  conferencingProvider?: ConferencingProvider | "custom" | "";
+  conferencingUrl?: string;
+  conferencingLabel?: string;
+};
+
+export const toPollConferencing = (
+  data: ConferencingFormValues,
+): PollConferencing | undefined => {
+  switch (data.conferencingProvider) {
+    case "zoom":
+    case "meet":
+    case "teams":
+    case "webex":
+      return { provider: data.conferencingProvider };
+    case "custom": {
+      const uri = data.conferencingUrl?.trim();
+      return {
+        provider: "custom",
+        label: data.conferencingLabel?.trim() ?? "",
+        ...(uri ? { uri } : {}),
+      };
+    }
+    default:
+      return undefined;
+  }
+};
+
+export const toConferencingFormValues = (
+  conferencing: PollConferencing | null,
+): Required<ConferencingFormValues> => ({
+  conferencingProvider: conferencing?.provider ?? "",
+  conferencingUrl:
+    conferencing?.provider === "custom" ? (conferencing.uri ?? "") : "",
+  conferencingLabel:
+    conferencing?.provider === "custom" ? conferencing.label : "",
+});
+
+// Menu entries for the "Add video call" menu: linked providers first,
+// then the rest this instance offers, then a pasted link. Renders nothing
+// once a choice is made: an event carries one meeting link. A caller on a
+// free plan passes `upsell` to mark the Pro providers and take the click, so
+// a choice that can never be cashed in is not made. Google Meet and a pasted
+// link are never gated.
+export function ConferencingProviderMenuItems({
+  available,
+  connected,
+  upsell,
+}: ConferencingOptions & {
+  upsell?: {
+    badge: React.ReactNode;
+    onSelect: (provider: ConferencingProvider) => void;
+  };
+}) {
+  const form = useFormContext<ConferencingFormValues>();
+  const value = form.watch("conferencingProvider");
+
+  if (value) {
+    return null;
+  }
+
+  const unconnected = available.filter(
+    (provider) => !connected.includes(provider),
+  );
+
+  const renderItem = (provider: ConferencingProvider) => {
+    const gate = isProConferencingProvider(provider) ? upsell : undefined;
+    return (
+      <DropdownMenuItem
+        key={provider}
+        onClick={() => {
+          if (gate) {
+            gate.onSelect(provider);
+            return;
+          }
+          form.setValue("conferencingProvider", provider, {
+            shouldDirty: true,
+          });
+        }}
+      >
+        <ConferencingProviderIcon provider={provider} size={16} />
+        {conferencingProviderLabels[provider]}
+        {gate?.badge}
+      </DropdownMenuItem>
+    );
+  };
+
+  return (
+    <>
+      {connected.length > 0 ? (
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>
+            <Trans i18nKey="conferencingMenuConnected" defaults="Connected" />
+          </DropdownMenuLabel>
+          {connected.map(renderItem)}
+        </DropdownMenuGroup>
+      ) : null}
+      {unconnected.length > 0 ? (
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>
+            <Trans i18nKey="conferencingMenuAvailable" defaults="Available" />
+          </DropdownMenuLabel>
+          {unconnected.map(renderItem)}
+        </DropdownMenuGroup>
+      ) : null}
+      {available.length > 0 ? <DropdownMenuSeparator /> : null}
+      <DropdownMenuItem
+        onClick={() => {
+          form.setValue("conferencingProvider", "custom", {
+            shouldDirty: true,
+          });
+        }}
+      >
+        <VideoIcon />
+        <Trans i18nKey="customVideoCall" defaults="Custom" />
+      </DropdownMenuItem>
+    </>
+  );
+}
+
+// Shows the chosen provider, or the inputs for a pasted link. A provider
+// link is created when the organizer finalizes the poll, so an unlinked
+// account is caught here rather than at that later step.
+export function ConferencingField({
+  connected,
+}: Pick<ConferencingOptions, "connected">) {
+  const { t } = useTranslation();
+  const form = useFormContext<ConferencingFormValues>();
+  // `trigger` is stable; the context object itself is not (FormProvider
+  // rebuilds it every render), so depending on `form` here would loop.
+  const { trigger } = form;
+  const value = form.watch("conferencingProvider");
+
+  // Validate as soon as a provider is set — by the menu or by a draft
+  // restored from storage — instead of waiting for the submit attempt. Runs
+  // after mount so the Controller's rule is registered.
+  React.useEffect(() => {
+    if (value && value !== "custom") {
+      void trigger("conferencingProvider");
+    }
+  }, [value, trigger]);
+
+  if (!value) {
+    return null;
+  }
+
+  const remove = () => {
+    form.setValue("conferencingProvider", "");
+    form.setValue("conferencingUrl", "");
+    form.setValue("conferencingLabel", "");
+    form.clearErrors([
+      "conferencingProvider",
+      "conferencingLabel",
+      "conferencingUrl",
+    ]);
+  };
+
+  const header = (
+    <div className="flex items-center justify-between">
+      <FormLabel
+        htmlFor={value === "custom" ? "conferencing-label" : undefined}
+      >
+        <Trans i18nKey="videoCall" defaults="Video call" />
+      </FormLabel>
+      <Button
+        type="button"
+        variant="link"
+        size="sm"
+        className="h-auto p-0 text-muted-foreground hover:text-foreground"
+        onClick={remove}
+      >
+        <Trans i18nKey="remove" defaults="Remove" />
+      </Button>
+    </div>
+  );
+
+  if (value === "custom") {
+    return (
+      <FormItem>
+        {header}
+        <div className="grid gap-2 sm:grid-cols-[12rem_1fr]">
+          <Controller
+            control={form.control}
+            name="conferencingLabel"
+            rules={{
+              validate: (label) =>
+                label?.trim()
+                  ? true
+                  : t("customVideoCallNameRequired", {
+                      defaultValue: "Name the call, like Microsoft Teams.",
+                    }),
+            }}
+            render={({ field, fieldState }) => (
+              <div className="grid gap-2">
+                <Input
+                  {...field}
+                  value={field.value ?? ""}
+                  id="conferencing-label"
+                  type="text"
+                  maxLength={100}
+                  placeholder={t("customVideoCallNamePlaceholder", {
+                    defaultValue: "Microsoft Teams",
+                  })}
+                  aria-invalid={fieldState.error ? true : undefined}
+                />
+                {fieldState.error ? (
+                  <p className="text-destructive text-sm" role="alert">
+                    {fieldState.error.message}
+                  </p>
+                ) : null}
+              </div>
+            )}
+          />
+          <Controller
+            control={form.control}
+            name="conferencingUrl"
+            rules={{
+              validate: (url) => {
+                if (!url?.trim()) {
+                  return true;
+                }
+                try {
+                  const { protocol } = new URL(url.trim());
+                  if (protocol !== "https:" && protocol !== "http:") {
+                    throw new Error();
+                  }
+                  return true;
+                } catch {
+                  return t("customLinkInvalid", {
+                    defaultValue: "That doesn't look like a link.",
+                  });
+                }
+              },
+            }}
+            render={({ field, fieldState }) => (
+              <div className="grid gap-2">
+                {/* Not type="url": the browser's own constraint check would
+                    block submit before react-hook-form's rule runs, so the
+                    organizer would see no message. */}
+                <Input
+                  {...field}
+                  value={field.value ?? ""}
+                  id="conferencing-url"
+                  type="text"
+                  inputMode="url"
+                  autoComplete="url"
+                  aria-label={t("customLinkOptional", {
+                    defaultValue: "Link (optional)",
+                  })}
+                  placeholder={t("customLinkOptional", {
+                    defaultValue: "Link (optional)",
+                  })}
+                  aria-invalid={fieldState.error ? true : undefined}
+                />
+                {fieldState.error ? (
+                  <p className="text-destructive text-sm" role="alert">
+                    {fieldState.error.message}
+                  </p>
+                ) : null}
+              </div>
+            )}
+          />
+        </div>
+      </FormItem>
+    );
+  }
+
+  return (
+    <Controller
+      control={form.control}
+      name="conferencingProvider"
+      rules={{
+        validate: (provider) =>
+          !provider || provider === "custom" || connected.includes(provider)
+            ? true
+            : "not_connected",
+      }}
+      render={({ field, fieldState }) => {
+        const provider = field.value as ConferencingProvider;
+        const label = conferencingProviderLabels[provider];
+
+        return (
+          <FormItem>
+            {header}
+            <div className="flex h-9 items-center gap-x-2 rounded-xl border border-input bg-background/80 px-2.5 text-sm dark:bg-foreground/5">
+              <ConferencingProviderIcon provider={provider} size={16} />
+              <span>{label}</span>
+            </div>
+            {fieldState.error ? (
+              <p className="text-destructive text-sm" role="alert">
+                <Trans
+                  i18nKey="conferencingNotConnected"
+                  defaults="{provider} is not connected. Visit the <a>Conferencing settings</a> page to connect your account."
+                  values={{ provider: label }}
+                  components={{
+                    a: (
+                      <Link
+                        href="/settings/conferencing"
+                        className="underline hover:text-foreground"
+                      />
+                    ),
+                  }}
+                />
+              </p>
+            ) : null}
+          </FormItem>
+        );
+      }}
+    />
+  );
+}

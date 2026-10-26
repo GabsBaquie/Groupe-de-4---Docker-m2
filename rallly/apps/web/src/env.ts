@@ -1,0 +1,405 @@
+// Keep this module out of client bundles: its runtime validation requires
+// `NEXT_PUBLIC_BASE_URL`, which self-hosted deployments set at runtime and is
+// therefore absent on the client. A client import here crashes those builds
+// (see issue #2474). Client code must read `process.env.NEXT_PUBLIC_*` directly.
+import "server-only";
+import { createEnv } from "@t3-oss/env-nextjs";
+import * as z from "zod";
+import { cookieDomainSchema } from "@/lib/cookie-domain";
+
+// Base URL fallback on preview deployments, where `NEXT_PUBLIC_BASE_URL` is
+// unset. Prefer the stable branch alias (the URL Vercel links to) over the
+// per-deployment URL. See `getVercelUrl` in `@rallly/utils/absolute-url`.
+const vercelUrl = process.env.VERCEL_BRANCH_URL || process.env.VERCEL_URL;
+
+export const env = createEnv({
+  /*
+   * Serverside Environment variables, not available on the client.
+   * Will throw if you access these variables on the client.
+   */
+  server: {
+    DATABASE_URL: z.url(),
+    NODE_ENV: z
+      .enum(["development", "production", "test"])
+      .default("development"),
+    SECRET_PASSWORD: z.string().min(32),
+    /**
+     * OIDC Configuration
+     */
+    OIDC_NAME: z.string().default("OpenID Connect"),
+    OIDC_DISCOVERY_URL: z.string().optional(),
+    OIDC_CLIENT_ID: z.string().optional(),
+    OIDC_CLIENT_SECRET: z.string().optional(),
+    OIDC_ISSUER_URL: z.string().optional(),
+    OIDC_EMAIL_CLAIM_PATH: z.string().default("email"),
+    OIDC_NAME_CLAIM_PATH: z.string().default("name"),
+    OIDC_PICTURE_CLAIM_PATH: z.string().default("picture"),
+    /**
+     * Email Provider
+     * Choose which service provider to use for sending emails.
+     * Make sure to configure the corresponding environment variables.
+     */
+    EMAIL_PROVIDER: z.enum(["smtp", "ses"]).default("smtp"),
+    /**
+     * SMTP Configuration
+     */
+    SMTP_HOST: z.string().optional(),
+    SMTP_USER: z.string().optional(),
+    SMTP_PWD: z.string().optional(),
+    SMTP_SECURE: z.enum(["true", "false"]).optional(),
+    SMTP_PORT: z.string().optional(),
+    SMTP_REJECT_UNAUTHORIZED: z.enum(["true", "false"]).optional(),
+    /** @deprecated Use SMTP_REJECT_UNAUTHORIZED instead */
+    SMTP_TLS_ENABLED: z.enum(["true", "false"]).optional(),
+    /** @deprecated No longer supported; send failures log the server response */
+    SMTP_DEBUG: z.enum(["true", "false"]).optional(),
+    /**
+     * AWS SES Configuration
+     */
+    AWS_ACCESS_KEY_ID: z.string().optional(),
+    AWS_SECRET_ACCESS_KEY: z.string().optional(),
+    AWS_REGION: z.string().optional(),
+    /**
+     * Where SES sends bounce and complaint reports instead of the From
+     * address. Must be an address on a verified SES identity.
+     */
+    SES_FEEDBACK_EMAIL: z.email().optional(),
+    /**
+     * Comma separated list of email addresses that are allowed to register and login.
+     * If not set, all emails are allowed. Wildcard characters are supported.
+     *
+     * Example: "user@example.com, *@example.com, *@*.example.com"
+     */
+    ALLOWED_EMAILS: z.string().optional(),
+    EMAIL_LOGIN_ENABLED: z.enum(["true", "false"]).default("true"),
+    REGISTRATION_ENABLED: z.enum(["true", "false"]).default("true"),
+    /**
+     * Email addresses for support and no-reply emails.
+     */
+    SUPPORT_EMAIL: z.email(),
+    NOREPLY_EMAIL: z.email().optional(),
+    NOREPLY_EMAIL_NAME: z.string().default("Rallly"),
+
+    /**
+     * S3 Configuration
+     */
+    S3_BUCKET_NAME: z.string().optional(),
+    S3_ENDPOINT: z.string().optional(),
+    S3_ACCESS_KEY_ID: z.string().optional(),
+    S3_SECRET_ACCESS_KEY: z.string().optional(),
+    S3_REGION: z.string().optional(),
+
+    /**
+     * OpenAI Configuration for AI moderation
+     */
+    OPENAI_API_KEY: z.string().optional(),
+    /**
+     * Enable or disable content moderation
+     * @default "false"
+     */
+    MODERATION_ENABLED: z.enum(["true", "false"]).default("false"),
+    /**
+     * Comma-separated list of domains that trigger an automatic user ban
+     */
+    BANNED_DOMAINS: z.string().optional(),
+    /**
+     * Licensing API Configuration
+     */
+    LICENSE_API_URL: z.string().optional(),
+    LICENSE_API_AUTH_TOKEN: z.string().optional(),
+
+    /**
+     * Google Integration
+     */
+    GOOGLE_CLIENT_ID: z.string().optional(),
+    GOOGLE_CLIENT_SECRET: z.string().optional(),
+    // Set to "false" to keep the Google app for Calendar and Meet only.
+    GOOGLE_LOGIN_ENABLED: z.enum(["true", "false"]).default("true"),
+
+    /**
+     * Conferencing integrations (Google Meet, Zoom, Microsoft Teams, Webex).
+     * CONFERENCING_PROVIDERS lists the ones turned on by integration id; each
+     * is offered once its OAuth app below is set too.
+     */
+    CONFERENCING_PROVIDERS: z.string().optional(),
+    ZOOM_CLIENT_ID: z.string().optional(),
+    ZOOM_CLIENT_SECRET: z.string().optional(),
+    // Signs Zoom's event notifications, including app deauthorization.
+    ZOOM_WEBHOOK_SECRET_TOKEN: z.string().optional(),
+    WEBEX_CLIENT_ID: z.string().optional(),
+    WEBEX_CLIENT_SECRET: z.string().optional(),
+
+    /**
+     * Microsoft app registration, shared by sign in and Microsoft Teams.
+     */
+    MICROSOFT_TENANT_ID: z.string().optional().default("common"),
+    MICROSOFT_CLIENT_ID: z.string().optional(),
+    MICROSOFT_CLIENT_SECRET: z.string().optional(),
+    // Set to "false" to keep the Microsoft registration for Teams only.
+    MICROSOFT_LOGIN_ENABLED: z.enum(["true", "false"]).default("true"),
+
+    /**
+     * App name
+     */
+    APP_NAME: z.string().optional().default("Rallly"),
+    /**
+     * Primary color for theming (hex format, e.g., "#4f46e5")
+     */
+    PRIMARY_COLOR: z
+      .string()
+      .regex(/^#[0-9a-fA-F]{6}$/, "Invalid hex color")
+      .optional(),
+    /**
+     * Primary color for dark mode theming (hex format, e.g., "#6366f1")
+     * If not set, will be computed from PRIMARY_COLOR
+     */
+    PRIMARY_COLOR_DARK: z
+      .string()
+      .regex(/^#[0-9a-fA-F]{6}$/, "Invalid hex color")
+      .optional(),
+    LOGO_URL: z.url().optional(),
+    LOGO_URL_DARK: z.url().optional(),
+    LOGO_ICON_URL: z.url().optional(),
+    /**
+     * Hide attribution text on invite pages and emails
+     * @default "false"
+     */
+    HIDE_ATTRIBUTION: z.enum(["true", "false"]).default("false"),
+    /**
+     * Enable or disable rate limiting globally.
+     * @default "true"
+     */
+    RATE_LIMIT_ENABLED: z.enum(["true", "false"]).default("true"),
+    /**
+     * Run the queued email scheduler inside the server process. Off where a
+     * test needs to control exactly when the queue runs.
+     * @default "true"
+     */
+    EMAIL_QUEUE_SCHEDULER_ENABLED: z.enum(["true", "false"]).default("true"),
+    /**
+     * Cap the number of open polls an organizer can have at once by tier.
+     * Only takes effect where billing is enabled. Off until the limit dialog
+     * ships; turning it back off is the rollback.
+     * @default "false"
+     */
+    OPEN_POLL_LIMIT_ENABLED: z.enum(["true", "false"]).default("false"),
+
+    /**
+     * Take the app offline for scheduled maintenance. Page traffic is
+     * redirected to /maintenance and API requests are rejected with 503.
+     * @default "false"
+     */
+    MAINTENANCE_MODE: z.enum(["true", "false"]).default("false"),
+    /**
+     * Secret that lets an operator bypass maintenance mode by visiting
+     * /maintenance?token=<secret>
+     */
+    MAINTENANCE_BYPASS_TOKEN: z.string().min(16).optional(),
+
+    /**
+     * Upstash Redis URL and token for rate limiting and auth session storage.
+     * If not set, in-memory rate limiting and db session storage is used.
+     */
+    KV_REST_API_URL: z.url().optional(),
+    KV_REST_API_TOKEN: z.string().optional(),
+
+    /**
+     * Cloudflare Turnstile secret key for bot protection on registration.
+     * If not set, Turnstile verification is disabled.
+     */
+    TURNSTILE_SECRET_KEY: z.string().optional(),
+    /**
+     * Base URL of the Rallly cloud API (e.g. https://api.rallly.co).
+     * On the cloud deployment it names the host that serves `/v1` without
+     * the app's `/api` prefix (see the rewrite in next.config.ts) and is
+     * the `servers` entry of the OpenAPI document. The self-hosted Docker
+     * image sets it so the instance can phone home for update checks.
+     * Unset elsewhere — the features that depend on it no-op when it's
+     * missing.
+     */
+    API_BASE_URL: z.url().optional(),
+  },
+  /*
+   * Environment variables available on the client (and server).
+   *
+   * You'll get type errors if these are not prefixed with NEXT_PUBLIC_.
+   */
+  client: {
+    NEXT_PUBLIC_BASE_URL: z.url(),
+    NEXT_PUBLIC_POSTHOG_API_KEY: z.string().optional(),
+    NEXT_PUBLIC_POSTHOG_API_HOST: z.url().optional(),
+    NEXT_PUBLIC_POSTHOG_UI_HOST: z.url().optional(),
+    NEXT_PUBLIC_SELF_HOSTED: z.enum(["true", "false"]).optional(),
+    /**
+     * Cloudflare Turnstile site key for bot protection on registration.
+     * If not set, the Turnstile widget is not rendered.
+     */
+    NEXT_PUBLIC_TURNSTILE_SITE_KEY: z.string().optional(),
+    /**
+     * Public CDN base URL for serving stored assets directly (e.g. a CloudFront distribution or
+     * a public MinIO bucket URL). When set, image URLs are constructed as
+     * `${NEXT_PUBLIC_CDN_BASE_URL}/${key}` instead of routing through the `/api/storage/` proxy.
+     * If not set, assets are proxied through Next.js (current behaviour).
+     */
+    NEXT_PUBLIC_CDN_BASE_URL: z.url().optional(),
+    /**
+     * Base URL for links handed to participants (poll invites, event pages).
+     * Lets those links live on a marketing domain that redirects to this
+     * instance. Defaults to `NEXT_PUBLIC_BASE_URL`.
+     */
+    NEXT_PUBLIC_SHORT_BASE_URL: z.url().optional(),
+    /**
+     * Domain to attach to server-set cookies (auth session, locale).
+     * Set to a parent domain prefixed with a leading dot (e.g. `.rallly.co`)
+     * to make these cookies readable across subdomains. When unset, cookies
+     * stay scoped to the exact request host. Must be a registrable DNS
+     * domain: browsers ignore the Domain attribute for localhost, dotless
+     * hostnames, IP addresses, and public suffixes, which breaks sign-in.
+     */
+    NEXT_PUBLIC_COOKIE_DOMAIN: cookieDomainSchema.optional(),
+  },
+  /*
+   * Due to how Next.js bundles environment variables on Edge and Client,
+   * we need to manually destructure them to make sure all are included in bundle.
+   *
+   * You'll get type errors if not all variables from `server` & `client` are included here.
+   */
+  runtimeEnv: {
+    DATABASE_URL: process.env.DATABASE_URL,
+    NODE_ENV: process.env.NODE_ENV,
+    SECRET_PASSWORD: process.env.SECRET_PASSWORD,
+    OIDC_NAME: process.env.OIDC_NAME,
+    OIDC_DISCOVERY_URL: process.env.OIDC_DISCOVERY_URL,
+    OIDC_CLIENT_ID: process.env.OIDC_CLIENT_ID,
+    OIDC_CLIENT_SECRET: process.env.OIDC_CLIENT_SECRET,
+    OIDC_ISSUER_URL: process.env.OIDC_ISSUER_URL,
+    OIDC_EMAIL_CLAIM_PATH: process.env.OIDC_EMAIL_CLAIM_PATH,
+    OIDC_NAME_CLAIM_PATH: process.env.OIDC_NAME_CLAIM_PATH,
+    OIDC_PICTURE_CLAIM_PATH: process.env.OIDC_PICTURE_CLAIM_PATH,
+    EMAIL_PROVIDER: process.env.EMAIL_PROVIDER,
+    SMTP_HOST: process.env.SMTP_HOST,
+    SMTP_USER: process.env.SMTP_USER,
+    SMTP_PWD: process.env.SMTP_PWD,
+    SMTP_SECURE: process.env.SMTP_SECURE,
+    SMTP_PORT: process.env.SMTP_PORT,
+    SMTP_REJECT_UNAUTHORIZED: process.env.SMTP_REJECT_UNAUTHORIZED,
+    SMTP_TLS_ENABLED: process.env.SMTP_TLS_ENABLED,
+    SMTP_DEBUG: process.env.SMTP_DEBUG,
+    ALLOWED_EMAILS: process.env.ALLOWED_EMAILS,
+    EMAIL_LOGIN_ENABLED: process.env.EMAIL_LOGIN_ENABLED,
+    REGISTRATION_ENABLED: process.env.REGISTRATION_ENABLED,
+    AWS_ACCESS_KEY_ID: process.env.AWS_ACCESS_KEY_ID,
+    AWS_SECRET_ACCESS_KEY: process.env.AWS_SECRET_ACCESS_KEY,
+    AWS_REGION: process.env.AWS_REGION,
+    SES_FEEDBACK_EMAIL: process.env.SES_FEEDBACK_EMAIL,
+    S3_BUCKET_NAME: process.env.S3_BUCKET_NAME,
+    S3_ENDPOINT: process.env.S3_ENDPOINT,
+    S3_ACCESS_KEY_ID: process.env.S3_ACCESS_KEY_ID,
+    S3_SECRET_ACCESS_KEY: process.env.S3_SECRET_ACCESS_KEY,
+    S3_REGION: process.env.S3_REGION,
+    NEXT_PUBLIC_BASE_URL:
+      process.env.NEXT_PUBLIC_BASE_URL ??
+      (vercelUrl ? `https://${vercelUrl}` : undefined),
+    NEXT_PUBLIC_POSTHOG_API_KEY: process.env.NEXT_PUBLIC_POSTHOG_API_KEY,
+    NEXT_PUBLIC_POSTHOG_API_HOST: process.env.NEXT_PUBLIC_POSTHOG_API_HOST,
+    NEXT_PUBLIC_POSTHOG_UI_HOST: process.env.NEXT_PUBLIC_POSTHOG_UI_HOST,
+    NEXT_PUBLIC_SELF_HOSTED: process.env.NEXT_PUBLIC_SELF_HOSTED,
+    SUPPORT_EMAIL: process.env.SUPPORT_EMAIL,
+    NOREPLY_EMAIL: process.env.NOREPLY_EMAIL,
+    NOREPLY_EMAIL_NAME: process.env.NOREPLY_EMAIL_NAME,
+    OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+    MODERATION_ENABLED: process.env.MODERATION_ENABLED,
+    BANNED_DOMAINS: process.env.BANNED_DOMAINS,
+    KV_REST_API_URL: process.env.KV_REST_API_URL,
+    KV_REST_API_TOKEN: process.env.KV_REST_API_TOKEN,
+    LICENSE_API_URL: process.env.LICENSE_API_URL,
+    LICENSE_API_AUTH_TOKEN: process.env.LICENSE_API_AUTH_TOKEN,
+    GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
+    GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
+    GOOGLE_LOGIN_ENABLED: process.env.GOOGLE_LOGIN_ENABLED,
+    CONFERENCING_PROVIDERS: process.env.CONFERENCING_PROVIDERS,
+    ZOOM_CLIENT_ID: process.env.ZOOM_CLIENT_ID,
+    ZOOM_CLIENT_SECRET: process.env.ZOOM_CLIENT_SECRET,
+    ZOOM_WEBHOOK_SECRET_TOKEN: process.env.ZOOM_WEBHOOK_SECRET_TOKEN,
+    WEBEX_CLIENT_ID: process.env.WEBEX_CLIENT_ID,
+    WEBEX_CLIENT_SECRET: process.env.WEBEX_CLIENT_SECRET,
+    MICROSOFT_TENANT_ID: process.env.MICROSOFT_TENANT_ID,
+    MICROSOFT_CLIENT_ID: process.env.MICROSOFT_CLIENT_ID,
+    MICROSOFT_CLIENT_SECRET: process.env.MICROSOFT_CLIENT_SECRET,
+    MICROSOFT_LOGIN_ENABLED: process.env.MICROSOFT_LOGIN_ENABLED,
+    PRIMARY_COLOR: process.env.PRIMARY_COLOR,
+    PRIMARY_COLOR_DARK: process.env.PRIMARY_COLOR_DARK,
+    LOGO_URL: process.env.LOGO_URL,
+    LOGO_URL_DARK: process.env.LOGO_URL_DARK,
+    LOGO_ICON_URL: process.env.LOGO_ICON_URL,
+    APP_NAME: process.env.APP_NAME,
+    HIDE_ATTRIBUTION: process.env.HIDE_ATTRIBUTION,
+    RATE_LIMIT_ENABLED: process.env.RATE_LIMIT_ENABLED,
+    EMAIL_QUEUE_SCHEDULER_ENABLED: process.env.EMAIL_QUEUE_SCHEDULER_ENABLED,
+    OPEN_POLL_LIMIT_ENABLED: process.env.OPEN_POLL_LIMIT_ENABLED,
+    MAINTENANCE_MODE: process.env.MAINTENANCE_MODE,
+    MAINTENANCE_BYPASS_TOKEN: process.env.MAINTENANCE_BYPASS_TOKEN,
+    TURNSTILE_SECRET_KEY: process.env.TURNSTILE_SECRET_KEY,
+    API_BASE_URL: process.env.API_BASE_URL,
+    NEXT_PUBLIC_TURNSTILE_SITE_KEY: process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY,
+    NEXT_PUBLIC_CDN_BASE_URL: process.env.NEXT_PUBLIC_CDN_BASE_URL,
+    NEXT_PUBLIC_SHORT_BASE_URL: process.env.NEXT_PUBLIC_SHORT_BASE_URL,
+    // Empty string means unset: the process env can override an .env file
+    // value but never remove it, so this is the only way a dev server on
+    // plain localhost can neutralize a configured cookie domain.
+    NEXT_PUBLIC_COOKIE_DOMAIN:
+      process.env.NEXT_PUBLIC_COOKIE_DOMAIN || undefined,
+  },
+  skipValidation: !!process.env.SKIP_ENV_VALIDATION,
+  createFinalSchema: (shape) =>
+    z.object(shape).superRefine((env, ctx) => {
+      // Authenticated SMTP needs both credentials; nodemailer fails at send
+      // time with a cryptic "Missing credentials" error if one is missing.
+      if (Boolean(env.SMTP_USER) !== Boolean(env.SMTP_PWD)) {
+        ctx.addIssue({
+          code: "custom",
+          path: [env.SMTP_USER ? "SMTP_PWD" : "SMTP_USER"],
+          message:
+            "SMTP_USER and SMTP_PWD must be set together. Set both to use authenticated SMTP, or neither to connect without authentication.",
+        });
+      }
+
+      if (Boolean(env.ZOOM_CLIENT_ID) !== Boolean(env.ZOOM_CLIENT_SECRET)) {
+        ctx.addIssue({
+          code: "custom",
+          path: [env.ZOOM_CLIENT_ID ? "ZOOM_CLIENT_SECRET" : "ZOOM_CLIENT_ID"],
+          message:
+            "ZOOM_CLIENT_ID and ZOOM_CLIENT_SECRET must be set together.",
+        });
+      }
+
+      const conferencingIds = [
+        "google-meet",
+        "zoom",
+        "microsoft-teams",
+        "webex",
+      ];
+      const unknownConferencing = (env.CONFERENCING_PROVIDERS ?? "")
+        .split(",")
+        .map((entry) => entry.trim().toLowerCase())
+        .filter((entry) => entry && !conferencingIds.includes(entry));
+      if (unknownConferencing.length > 0) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["CONFERENCING_PROVIDERS"],
+          message: `CONFERENCING_PROVIDERS has unknown values: ${unknownConferencing.join(", ")}. Use a comma separated list of ${conferencingIds.join(", ")}.`,
+        });
+      }
+
+      if (Boolean(env.WEBEX_CLIENT_ID) !== Boolean(env.WEBEX_CLIENT_SECRET)) {
+        ctx.addIssue({
+          code: "custom",
+          path: [
+            env.WEBEX_CLIENT_ID ? "WEBEX_CLIENT_SECRET" : "WEBEX_CLIENT_ID",
+          ],
+          message:
+            "WEBEX_CLIENT_ID and WEBEX_CLIENT_SECRET must be set together.",
+        });
+      }
+    }),
+});

@@ -1,0 +1,66 @@
+import * as z from "zod";
+
+export const billingIntervalSchema = z.enum(["month", "year"]);
+export type BillingInterval = z.infer<typeof billingIntervalSchema>;
+
+export const subscriptionStatusSchema = z.enum([
+  "incomplete",
+  "incomplete_expired",
+  "active",
+  "paused",
+  "trialing",
+  "past_due",
+  "canceled",
+  "unpaid",
+]);
+export type SubscriptionStatus = z.infer<typeof subscriptionStatusSchema>;
+
+export const customerMetadataSchema = z.object({
+  userId: z.string(),
+});
+export type CustomerMetadata = z.infer<typeof customerMetadataSchema>;
+
+export const subscriptionCheckoutMetadataSchema = z.object({
+  userId: z.string(),
+  spaceId: z.string().optional(),
+});
+
+export type SubscriptionCheckoutMetadata = z.infer<
+  typeof subscriptionCheckoutMetadataSchema
+>;
+
+export const subscriptionMetadataSchema = z.object({
+  userId: z.string(),
+  spaceId: z.string(),
+});
+
+export type SubscriptionMetadata = z.infer<typeof subscriptionMetadataSchema>;
+
+export const billingReturnFlowSchema = z.enum([
+  "seats",
+  "interval",
+  "payment_method",
+]);
+export type BillingReturnFlow = z.infer<typeof billingReturnFlowSchema>;
+
+// Finer than Stripe's fixed feedback list: Stripe has one "unused" bucket for
+// both a finished one-off event and a subscriber who never got value.
+export const cancellationReasonSchema = z.enum([
+  "one_off_event",
+  "not_using",
+  "too_expensive",
+  "missing_features",
+  "switched_service",
+  "other",
+]);
+export type CancellationReason = z.infer<typeof cancellationReasonSchema>;
+
+// Stripe's `card` object as stored on PaymentMethod.data. Parsed rather than
+// cast: the row is written from whatever Stripe sent at the time.
+export const paymentMethodCardSchema = z.object({
+  brand: z.string(),
+  last4: z.string(),
+  exp_month: z.number(),
+  exp_year: z.number(),
+});
+export type PaymentMethodCard = z.infer<typeof paymentMethodCardSchema>;

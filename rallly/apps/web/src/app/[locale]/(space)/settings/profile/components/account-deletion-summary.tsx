@@ -1,0 +1,81 @@
+import { Alert, AlertDescription } from "@rallly/ui/alert";
+import { Skeleton } from "@rallly/ui/skeleton";
+import { BarChart2Icon, CalendarIcon, InfoIcon } from "lucide-react";
+import { getUserUpcomingEventCount } from "@/features/scheduled-event/data";
+import { getAccountDeletionSummary } from "@/features/user/account-deletion/data";
+import { loadUser } from "@/features/user/loaders";
+import { Trans } from "@/i18n/client";
+
+// Streamed into the delete account dialog behind Suspense so opening the
+// settings page never waits on the counts.
+export async function AccountDeletionSummary() {
+  const user = await loadUser();
+  // Composed here rather than inside the user feature so user does not
+  // depend on scheduled-event (which depends on conferencing, which gates
+  // its loaders on user).
+  const [{ activePollCount, hasActiveSubscription }, upcomingEventCount] =
+    await Promise.all([
+      getAccountDeletionSummary({ userId: user.id }),
+      getUserUpcomingEventCount({
+        userId: user.id,
+        timeZone: user.timeZone ?? "UTC",
+      }),
+    ]);
+
+  const hasResources = activePollCount > 0 || upcomingEventCount > 0;
+
+  if (!hasResources && !hasActiveSubscription) {
+    return null;
+  }
+
+  return (
+    <>
+      {hasResources ? (
+        <ul className="space-y-2">
+          {activePollCount > 0 ? (
+            <li className="flex items-center gap-x-2">
+              <BarChart2Icon className="size-4 shrink-0 text-muted-foreground" />
+              <Trans
+                i18nKey="deleteAccountActivePolls"
+                defaults="{count, plural, one {# active poll} other {# active polls}}"
+                values={{ count: activePollCount }}
+              />
+            </li>
+          ) : null}
+          {upcomingEventCount > 0 ? (
+            <li className="flex items-center gap-x-2">
+              <CalendarIcon className="size-4 shrink-0 text-muted-foreground" />
+              <Trans
+                i18nKey="deleteAccountUpcomingEvents"
+                defaults="{count, plural, one {# upcoming event} other {# upcoming events}}"
+                values={{ count: upcomingEventCount }}
+              />
+            </li>
+          ) : null}
+        </ul>
+      ) : null}
+      {hasActiveSubscription ? (
+        <Alert>
+          <InfoIcon />
+          <AlertDescription>
+            <p>
+              <Trans
+                i18nKey="deleteAccountSubscriptionNotice"
+                defaults="Your Pro subscription will not renew and will end with your current billing period. If you cancel the deletion, your subscription will continue as normal."
+              />
+            </p>
+          </AlertDescription>
+        </Alert>
+      ) : null}
+    </>
+  );
+}
+
+export function AccountDeletionSummarySkeleton() {
+  return (
+    <div className="space-y-2">
+      <Skeleton className="h-5 w-40" />
+      <Skeleton className="h-5 w-48" />
+    </div>
+  );
+}

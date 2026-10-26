@@ -1,0 +1,5 @@
+{
+  "extends": "@rallly/tsconfig/node.json",
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules"]
+}

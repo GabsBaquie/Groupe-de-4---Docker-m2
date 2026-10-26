@@ -1,0 +1,21 @@
+export interface FeatureFlagConfig {
+  storage: boolean;
+  billing: boolean;
+  feedback: boolean;
+  emailLogin: boolean;
+  captcha: boolean;
+  registration: boolean;
+  calendars: boolean;
+  conferencing: boolean;
+  eventTypes: boolean;
+  pollAdmin: boolean;
+  quickCreate: boolean;
+  inProcessRateLimit: boolean;
+  api: boolean;
+  webhooks: boolean;
+  updateCheck: boolean;
+  reviewRequests: boolean;
+  openPollLimit: boolean;
+}
+
+export type Feature = keyof FeatureFlagConfig;

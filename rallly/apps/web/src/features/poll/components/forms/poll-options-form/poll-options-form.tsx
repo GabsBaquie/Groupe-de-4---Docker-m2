@@ -1,0 +1,299 @@
+import { cn } from "@rallly/ui";
+import { Button } from "@rallly/ui/button";
+import { Card, CardDescription, CardHeader, CardTitle } from "@rallly/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  useDialog,
+} from "@rallly/ui/dialog";
+import { FormField, FormMessage } from "@rallly/ui/form";
+import { Label } from "@rallly/ui/label";
+import { Switch } from "@rallly/ui/switch";
+import { Tabs, TabsList, TabsTrigger } from "@rallly/ui/tabs";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@rallly/ui/tooltip";
+import { CalendarIcon, InfoIcon, TableIcon } from "lucide-react";
+import * as React from "react";
+import { useFormContext } from "react-hook-form";
+import { TimeZoneSelect } from "@/components/time-zone-picker/time-zone-select";
+import { useUser } from "@/features/user/client";
+import { Trans, useTranslation } from "@/i18n/client";
+
+import { getBrowserTimeZone } from "@/lib/utils/date-time-utils";
+import type { NewEventData } from "../types";
+import MonthCalendar from "./month-calendar/month-calendar";
+import { hasMixedOptionTypes, isAllDay } from "./utils";
+import WeekCalendar from "./week-calendar";
+
+const PollOptionsForm = ({
+  children,
+  disableTimeZoneChange,
+}: React.PropsWithChildren<{ disableTimeZoneChange?: boolean }>) => {
+  const { t } = useTranslation();
+  const form = useFormContext<NewEventData>();
+
+  const { watch, setValue, formState } = form;
+  const { user } = useUser();
+  const defaultTimeZone = user?.timeZone || getBrowserTimeZone();
+
+  const views = React.useMemo(() => {
+    const res = [
+      {
+        label: t("monthView", { defaultValue: "Month view" }),
+        value: "month",
+        Component: MonthCalendar,
+      },
+      {
+        label: t("weekView", { defaultValue: "Week view" }),
+        value: "week",
+        Component: WeekCalendar,
+      },
+    ];
+    return res;
+  }, [t]);
+
+  const watchView = watch("view");
+
+  const selectedView = React.useMemo(
+    () => views.find((view) => view.value === watchView) ?? views[0],
+    [views, watchView],
+  );
+
+  const watchOptions = watch("options", []);
+  const watchDuration = watch("duration");
+  const watchTimeZone = watch("timeZone");
+  const watchLockTimeZone = watch("lockTimeZone");
+
+  const dateOrTimeRangeDialog = useDialog();
+
+  const allDay = isAllDay(watchOptions);
+
+  const watchNavigationDate = watch("navigationDate");
+  const navigationDate = new Date(watchNavigationDate ?? Date.now());
+
+  return (
+    <Card>
+      <CardHeader className="border-card-border border-b">
+        <div className="flex flex-col justify-between gap-4 sm:flex-row">
+          <div>
+            <CardTitle>
+              <Trans i18nKey="calendar">Calendar</Trans>
+            </CardTitle>
+            <CardDescription>
+              <Trans
+                i18nKey="selectPotentialDates"
+                defaults="Select potential dates or times for your event"
+              >
+                Select potential dates or times for your event
+              </Trans>
+            </CardDescription>
+          </div>
+          <div>
+            <FormField
+              control={form.control}
+              name="view"
+              render={({ field }) => (
+                <Tabs value={field.value} onValueChange={field.onChange}>
+                  <TabsList className="w-full">
+                    <TabsTrigger className="grow" value="month">
+                      <CalendarIcon className="mr-2 size-4" />
+                      <Trans i18nKey="monthView" defaults="Month view" />
+                    </TabsTrigger>
+                    <TabsTrigger className="grow" value="week">
+                      <TableIcon className="mr-2 size-4" />
+                      <Trans i18nKey="weekView" defaults="Week view" />
+                    </TabsTrigger>
+                  </TabsList>
+                </Tabs>
+              )}
+            />
+          </div>
+        </div>
+      </CardHeader>
+      <Dialog {...dateOrTimeRangeDialog.dialogProps}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              <Trans i18nKey="mixedOptionsTitle" defaults="Wait a minute… 🤔" />
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm">
+            <Trans
+              i18nKey="mixedOptionsDescription"
+              defaults="You can't have both time and date options in the same poll. Which would you like to keep?"
+            />
+          </p>
+          <DialogFooter>
+            <Button
+              onClick={() => {
+                setValue(
+                  "options",
+                  watchOptions.filter((option) => option.type === "date"),
+                );
+                setValue("timeZone", "");
+                dateOrTimeRangeDialog.dismiss();
+              }}
+            >
+              <Trans
+                i18nKey="mixedOptionsKeepDates"
+                defaults="Keep date options"
+              />
+            </Button>
+            <Button
+              onClick={() => {
+                setValue(
+                  "options",
+                  watchOptions.filter((option) => option.type === "timeSlot"),
+                );
+                if (!watchTimeZone) {
+                  setValue("timeZone", defaultTimeZone);
+                }
+                dateOrTimeRangeDialog.dismiss();
+              }}
+              variant="primary"
+            >
+              <Trans
+                i18nKey="mixedOptionsKeepTimes"
+                defaults="Keep time options"
+              />
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <div>
+        <FormField
+          control={form.control}
+          name="options"
+          rules={{
+            validate: (options) => {
+              if (options.length === 0) {
+                return t("calendarHelp", {
+                  defaultValue:
+                    "You can't create a poll without any options. Add at least one option to continue.",
+                });
+              }
+              // A draft restored from storage can be mixed without passing
+              // through the calendar's onChange, which opens the dialog
+              if (hasMixedOptionTypes(options)) {
+                return t("mixedOptionsError", {
+                  defaultValue:
+                    "A poll can't have both date and time options. Remove one kind to continue.",
+                });
+              }
+              return true;
+            },
+          }}
+          render={({ field }) => (
+            <div>
+              <selectedView.Component
+                options={field.value}
+                date={navigationDate}
+                onNavigate={(date) => {
+                  setValue("navigationDate", date.toISOString());
+                }}
+                onChange={(options) => {
+                  field.onChange(options);
+                  if (hasMixedOptionTypes(options)) {
+                    dateOrTimeRangeDialog.trigger();
+                  }
+                }}
+                duration={watchDuration}
+                timeZone={
+                  watchLockTimeZone
+                    ? undefined
+                    : watchTimeZone || defaultTimeZone
+                }
+                onChangeDuration={(duration) => {
+                  setValue("duration", duration);
+                }}
+              />
+              {formState.errors.options ? (
+                <div className="border-t p-3 text-center text-destructive">
+                  <FormMessage />
+                </div>
+              ) : null}
+            </div>
+          )}
+        />
+      </div>
+      <FormField
+        control={form.control}
+        name="lockTimeZone"
+        render={({ field }) => {
+          // Locking is inert for all-day polls (no time to convert) and after
+          // votes are cast. Always render the row so the layout is stable.
+          const switchDisabled = disableTimeZoneChange || allDay;
+          // The zone selector matters only when times DO convert: not locked and
+          // not all-day.
+          const showTimeZoneSelect = !field.value && !allDay;
+          return (
+            <div
+              className={cn(
+                "grid items-center justify-between gap-2.5 border-t p-3 md:flex",
+              )}
+            >
+              <div className="flex h-9 items-center gap-x-2.5 p-2">
+                <Switch
+                  id="lockTimeZone"
+                  disabled={switchDisabled}
+                  checked={!!field.value}
+                  onCheckedChange={(checked) => {
+                    field.onChange(checked);
+                    // Unlocking turns conversion back on; seed the organizer's
+                    // zone so the selector has a value.
+                    if (!checked && !watchTimeZone) {
+                      setValue("timeZone", defaultTimeZone);
+                    }
+                  }}
+                />
+                <Label
+                  htmlFor="lockTimeZone"
+                  className={
+                    switchDisabled ? "text-muted-foreground" : undefined
+                  }
+                >
+                  <Trans i18nKey="lockTimeZone" defaults="Lock time zone" />
+                </Label>
+                <Tooltip>
+                  <TooltipTrigger type="button" delay={0}>
+                    <InfoIcon className="size-4 text-muted-foreground" />
+                  </TooltipTrigger>
+                  <TooltipContent className="w-72">
+                    {disableTimeZoneChange ? (
+                      <Trans
+                        i18nKey="lockTimeZoneDisabledHelp"
+                        defaults="The time zone can't be changed after votes have been cast."
+                      />
+                    ) : allDay ? (
+                      <Trans
+                        i18nKey="lockTimeZoneAllDayHelp"
+                        defaults="All-day options already show the same date to everyone."
+                      />
+                    ) : (
+                      <Trans
+                        i18nKey="lockTimeZoneHelp"
+                        defaults="Everyone sees the same time, instead of it converting to each participant's time zone."
+                      />
+                    )}
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+              {showTimeZoneSelect ? (
+                <TimeZoneSelect
+                  disabled={disableTimeZoneChange}
+                  value={watchTimeZone || defaultTimeZone}
+                  onValueChange={(value) => setValue("timeZone", value)}
+                />
+              ) : null}
+            </div>
+          );
+        }}
+      />
+      {children}
+    </Card>
+  );
+};
+
+export default React.memo(PollOptionsForm);

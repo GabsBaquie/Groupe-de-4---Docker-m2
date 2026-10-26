@@ -1,0 +1,33 @@
+---
+title: "Introduction"
+icon: "house"
+description: "Create and manage scheduling polls from your own systems."
+---
+
+The Rallly API lets you create polls, read their options, results and participants, and delete them from your own tools. Every request is scoped to one space: the API key identifies the space, and every poll you create or read belongs to it. [Webhooks](/api-reference/webhooks) tell your systems when a poll or a response changes, so you never have to poll for results.
+
+<Note>The API requires a Pro plan.</Note>
+
+## Getting a key
+
+Only the space owner can create API keys, from **Settings → API keys**. See [Authentication](/api-reference/authentication) for the header format and how keys are handled.
+
+## Base URL
+
+```text
+https://api.rallly.co/v1
+```
+
+`v1` is stable. Additive changes such as new endpoints or new optional fields may land at any time; breaking changes only arrive under a new version prefix. The [changelog](/api-reference/changelog) records both.
+
+## Conventions
+
+- Requests and responses are JSON. Send `Content-Type: application/json` with a body.
+- List endpoints return the items in `data`. `GET /polls` is paginated: it returns a `nextCursor` beside `data`; pass it as the `cursor` query parameter for the next page, and it is `null` on the last page. `GET /polls/:pollId/participants` returns every participant in one response, and `GET /polls/:pollId/participants/:participantId` returns one.
+- Timestamps are ISO 8601 instants in UTC. A `date` poll's options carry a floating `YYYY-MM-DD` date with no timezone; a `time` poll's options carry a `startTime` instant and a `duration` in minutes.
+- A participant's `availability` is a list of spans, `{ start, end, allDay, modifiers }`. A span matches an option by its time: `start` is the option's `startTime`, or midnight UTC of its `date` with `allDay: true`. `end` is exclusive.
+- Request bodies are validated strictly. A field that is not in the schema is rejected rather than ignored, so a misspelt setting never silently falls back to its default.
+
+## Machine readable spec
+
+The OpenAPI document that generates this reference is served at `https://api.rallly.co/v1/openapi`.

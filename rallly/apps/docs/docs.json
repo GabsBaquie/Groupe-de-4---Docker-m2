@@ -1,0 +1,207 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "Rallly",
+  "colors": {
+    "primary": "#4f46e5",
+    "light": "#847eed",
+    "dark": "#4f46e5"
+  },
+  "favicon": "/favicon.png",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": ["introduction", "faq"]
+          },
+          {
+            "group": "How it works",
+            "pages": ["workflow/create", "workflow/invite", "workflow/schedule"]
+          },
+          {
+            "group": "Spaces",
+            "pages": [
+              "spaces/introduction",
+              "spaces/managing-seats",
+              "spaces/members",
+              "spaces/collaboration",
+              "spaces/billing",
+              "spaces/custom-branding"
+            ]
+          },
+          {
+            "group": "Integrations",
+            "pages": [
+              "integrations/google-meet",
+              "integrations/zoom",
+              "integrations/microsoft-teams",
+              "integrations/webex"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": ["guide/participant-guide", "guide/content-moderation"]
+          },
+          {
+            "group": "Contact",
+            "pages": ["contact/support"]
+          }
+        ]
+      },
+      {
+        "tab": "Self-Hosting",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "self-hosting/introduction",
+              "self-hosting/installation/docker",
+              "self-hosting/configuration",
+              "self-hosting/single-sign-on",
+              "self-hosting/conferencing"
+            ]
+          },
+          {
+            "group": "Advanced",
+            "pages": [
+              "self-hosting/management",
+              "self-hosting/licensing",
+              "self-hosting/corporate-networks",
+              "self-hosting/white-labeling"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": ["self-hosting/control-panel", "self-hosting/migration"]
+          },
+          {
+            "group": "Misc",
+            "pages": ["self-hosting/managed-hosting"]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Getting started",
+            "pages": [
+              "api-reference/introduction",
+              "api-reference/authentication",
+              "api-reference/rate-limits",
+              "api-reference/errors",
+              "api-reference/changelog",
+              "api-reference/migrating-from-the-private-api"
+            ]
+          },
+          {
+            "group": "Polls",
+            "openapi": "/api-reference/openapi.json",
+            "pages": [
+              "POST /v1/polls",
+              "GET /v1/polls",
+              "GET /v1/polls/{pollId}",
+              "DELETE /v1/polls/{pollId}",
+              "GET /v1/polls/{pollId}/results",
+              "GET /v1/polls/{pollId}/participants",
+              "GET /v1/polls/{pollId}/participants/{participantId}"
+            ]
+          },
+          {
+            "group": "Webhooks",
+            "pages": [
+              "api-reference/webhooks",
+              "api-reference/webhooks/events",
+              "api-reference/webhooks/security",
+              {
+                "group": "Guides",
+                "pages": ["api-reference/webhooks/guides/n8n"],
+                "icon": "book-open"
+              }
+            ],
+            "tag": "Beta"
+          }
+        ]
+      },
+      {
+        "tab": "Contribute",
+        "groups": [
+          {
+            "group": "Contribute",
+            "pages": ["contribute/introduction"]
+          },
+          {
+            "group": "How to Contribute",
+            "pages": [
+              "contribute/donations",
+              "contribute/translations",
+              "contribute/documentation"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "logo": {
+    "light": "/logo/light.svg",
+    "dark": "/logo/dark.svg",
+    "href": "https://rallly.co"
+  },
+  "background": {
+    "color": {
+      "light": "#FFFFFF",
+      "dark": "#18181B"
+    }
+  },
+  "navbar": {
+    "links": [
+      {
+        "label": "Contact",
+        "href": "https://support.rallly.co/contact/support"
+      }
+    ],
+    "primary": {
+      "type": "button",
+      "label": "Go to app",
+      "href": "https://app.rallly.co"
+    }
+  },
+  "footer": {
+    "socials": {
+      "twitter": "https://twitter.com/ralllyco",
+      "linkedin": "https://www.linkedin.com/company/rallly/",
+      "github": "https://github.com/lukevella/rallly",
+      "discord": "https://discord.com/invite/uzg4ZcHbuM",
+      "website": "https://rallly.co/"
+    }
+  },
+  "redirects": [
+    {
+      "source": "/administrators/creating-a-meeting-poll",
+      "destination": "/workflow/create"
+    },
+    {
+      "source": "/administrators/sharing-a-meeting-poll",
+      "destination": "/workflow/invite"
+    },
+    {
+      "source": "/participants/submitting-a-response",
+      "destination": "/guide/participant-guide"
+    },
+    {
+      "source": "/participants/editing-a-response",
+      "destination": "/guide/participant-guide"
+    },
+    {
+      "source": "/self-hosting/pricing",
+      "destination": "/self-hosting/licensing"
+    },
+    {
+      "source": "/workflow/finalize",
+      "destination": "/workflow/schedule"
+    }
+  ]
+}

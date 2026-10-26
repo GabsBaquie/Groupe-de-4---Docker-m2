@@ -1,0 +1,254 @@
+import { createLogger } from "@rallly/logger";
+import { Effect } from "effect";
+import { Hono } from "hono";
+import { bearerAuth } from "hono/bearer-auth";
+import { handle } from "hono/vercel";
+import { runQueuedEmailDelivery } from "@/emails/queue";
+import {
+  cancelUserSubscriptions,
+  deleteStripeCustomer,
+} from "@/features/billing/mutations";
+import {
+  autoClosePolls,
+  deleteInactivePolls,
+  removeDeletedPolls,
+} from "@/features/poll/mutations";
+import { findUsersScheduledForRemoval } from "@/features/user/account-deletion/data";
+import { getAccountDeletionCutoff } from "@/features/user/account-deletion/utils";
+import {
+  deleteOrphanedAnonymousUsers,
+  hardDeleteUser,
+} from "@/features/user/mutations";
+import { deliverWebhooks } from "@/features/webhook/mutations";
+import { WebhookSender } from "@/features/webhook/service";
+import { runtime } from "@/lib/effect/runtime";
+import {
+  deletePostHogPerson,
+  flushPostHog,
+  trackSystemEvent,
+} from "@/lib/posthog";
+
+const logger = createLogger("api/house-keeping");
+
+const app = new Hono().basePath("/api/house-keeping");
+
+app.use("*", async (c, next) => {
+  if (process.env.CRON_SECRET) {
+    return bearerAuth({ token: process.env.CRON_SECRET })(c, next);
+  }
+
+  logger.error("CRON_SECRET is not set in environment variables");
+
+  return c.json(
+    {
+      error: "CRON_SECRET is not set in environment variables",
+    },
+    500,
+  );
+});
+
+app.get("/delete-inactive-polls", async (c) => {
+  const markedDeleted = await deleteInactivePolls();
+
+  logger.info(
+    { task: "delete-inactive-polls", markedDeleted },
+    "Marked inactive polls as deleted",
+  );
+
+  return c.json({
+    success: true,
+    summary: {
+      markedDeleted,
+    },
+  });
+});
+
+app.get("/auto-close-polls", async (c) => {
+  const closed = await autoClosePolls();
+
+  logger.info(
+    { task: "auto-close-polls", closed },
+    "Closed polls with all options ended",
+  );
+
+  return c.json({
+    success: true,
+    summary: {
+      closed,
+    },
+  });
+});
+
+app.get("/remove-deleted-polls", async (c) => {
+  const totalDeletedPolls = await removeDeletedPolls();
+
+  logger.info(
+    { task: "remove-deleted-polls", deletedPolls: totalDeletedPolls },
+    "Removed polls marked deleted over 7 days ago",
+  );
+
+  return c.json({
+    success: true,
+    summary: {
+      deleted: {
+        polls: totalDeletedPolls,
+      },
+    },
+  });
+});
+
+// Each user's removal makes external API calls, so give the function room
+// beyond the serverless default.
+export const maxDuration = 300;
+
+const REMOVE_DELETED_USERS_BATCH_SIZE = 50;
+// Backlog beyond this spills to the next daily run instead of risking a
+// function timeout mid-user.
+const REMOVE_DELETED_USERS_MAX_PER_RUN = 500;
+
+// Reaper for accounts whose scheduled deletion passed the recovery window.
+// Composed here because it spans features: external stores go first — Stripe
+// (defensive subscription cancel, then the customer object; invoices are
+// lawfully retained by Stripe) and PostHog — so a failure there leaves the
+// user row in place for the next run to retry.
+async function removeDeletedUsers() {
+  const cutoff = getAccountDeletionCutoff();
+  const failedUserIds: string[] = [];
+  let deletedUsers = 0;
+
+  while (
+    deletedUsers + failedUserIds.length <
+    REMOVE_DELETED_USERS_MAX_PER_RUN
+  ) {
+    const users = await findUsersScheduledForRemoval({
+      cutoff,
+      excludeUserIds: failedUserIds,
+      limit: REMOVE_DELETED_USERS_BATCH_SIZE,
+    });
+
+    if (users.length === 0) {
+      break;
+    }
+
+    for (const user of users) {
+      try {
+        await cancelUserSubscriptions({ userId: user.id });
+
+        if (user.customerId) {
+          await deleteStripeCustomer({ customerId: user.customerId });
+        }
+
+        await deletePostHogPerson({ distinctId: user.id });
+
+        await hardDeleteUser({ userId: user.id });
+
+        // Personless by design — the person this event is about was just
+        // erased, so it must not create or attach to a profile.
+        trackSystemEvent({ event: "account_deletion_complete" });
+
+        deletedUsers++;
+      } catch (error) {
+        logger.error(
+          { userId: user.id, error },
+          "Failed to remove user scheduled for deletion",
+        );
+        failedUserIds.push(user.id);
+      }
+    }
+  }
+
+  if (deletedUsers + failedUserIds.length >= REMOVE_DELETED_USERS_MAX_PER_RUN) {
+    logger.warn(
+      { deletedUsers, failed: failedUserIds.length },
+      "Reached the per-run cap for removing deleted users; remaining backlog spills to the next run",
+    );
+  }
+
+  return deletedUsers;
+}
+
+app.get("/remove-deleted-users", async (c) => {
+  const deletedUsers = await removeDeletedUsers();
+
+  await flushPostHog();
+
+  logger.info(
+    { task: "remove-deleted-users", deletedUsers },
+    "Removed users whose scheduled deletion passed the recovery window",
+  );
+
+  return c.json({
+    success: true,
+    summary: {
+      deleted: {
+        users: deletedUsers,
+      },
+    },
+  });
+});
+
+app.get("/delete-orphaned-anonymous-users", async (c) => {
+  const deleted = await deleteOrphanedAnonymousUsers();
+
+  // Runs hourly and most runs find nothing, so stay quiet unless there was
+  // work — otherwise the signal is buried in 24 no-op lines a day.
+  if (deleted > 0) {
+    logger.info(
+      { task: "delete-orphaned-anonymous-users", deleted },
+      "Deleted orphaned anonymous guest users idle longer than the session length",
+    );
+  }
+
+  return c.json({
+    success: true,
+    summary: {
+      deleted: {
+        anonymousUsers: deleted,
+      },
+    },
+  });
+});
+
+app.get("/deliver-webhooks", async (c) => {
+  // The scheduled run over every space. A write schedules its own scoped
+  // run in-process (scheduleWebhookDispatch); this one is the guarantee.
+  // A DatabaseError rejects here and Hono answers 500, as an uncaught throw
+  // did before.
+  const summary = await runtime.runPromise(
+    deliverWebhooks({ now: new Date() }).pipe(
+      Effect.provide(WebhookSender.layer),
+    ),
+  );
+
+  // Runs every minute and most runs find nothing; log only when there was
+  // work so the signal isn't buried in 1,440 no-op lines a day.
+  if (summary.fannedOut > 0 || summary.attempted > 0 || summary.reclaimed > 0) {
+    logger.info(
+      { task: "deliver-webhooks", ...summary },
+      "Dispatched webhook deliveries",
+    );
+  }
+
+  return c.json({ success: true, summary });
+});
+
+app.get("/send-queued-emails", async (c) => {
+  // The scheduled drain behind each action's own first batch. Each run
+  // sends one batch, so a large fan-out goes out at that rate.
+  const summary = await runQueuedEmailDelivery({});
+
+  // Some handlers capture events, such as the review request send.
+  await flushPostHog();
+
+  // Runs every minute and most runs find nothing.
+  if (summary.attempted > 0 || summary.abandoned > 0 || summary.purged > 0) {
+    logger.info(
+      { task: "send-queued-emails", ...summary },
+      "Sent queued emails",
+    );
+  }
+
+  return c.json({ success: true, summary });
+});
+
+export const GET = handle(app);

@@ -1,0 +1,93 @@
+---
+icon: "key"
+title: "Licensing"
+description: "Understand Rallly's self-hosting license requirements, tiers, and pricing."
+---
+
+Rallly is open-source and always free for personal use.
+If you want to run a multi-user setup, we ask that you purchase a license key.
+
+## Pricing
+
+
+| Tier         | User Limit    | Space Members | Price       |                                      |
+|:-------------|:--------------|:--------------|:------------|:-------------------------------------------------------|
+| **Personal** | 1 user        | 1 seat        | Free        | -                                                      |
+| **Plus**     | Up to 5 users | 5 seats       | $49         | [Buy License](https://rallly.co/buy-license/plus) |
+| **Organization** | Up to 50 users| 50 seats      | $499        | [Buy License](https://rallly.co/buy-license/organization) |
+| **Enterprise** | 50+ users     | 100 seats     | From $999   | [Get Quote](https://app.formbricks.com/s/cmebvnf2ohvjkt901eefxsonr) |
+
+<Note>
+The license key you purchase is a **perpetual license specifically for Rallly v4.x versions**. This means your license will grant you access to all features and updates within the entire Rallly v4 series for the user tier you've selected.
+</Note>
+
+## Activating Your License
+
+Once you have your license key, you can activate it in your self-hosted Rallly instance:
+
+1.  Log in to your Rallly instance as an administrator.
+2.  Navigate to the [Control Panel](/self-hosting/control-panel).
+3.  Select **License**.
+4.  Enter your license key in the provided field and click **Activate**.
+
+Your instance will now be licensed for multi-user access according to your chosen tier.
+
+<Note>
+Activation requires your server to reach `licensing.rallly.co` over HTTPS. If activation fails and your server sits behind a corporate proxy or a firewall that inspects TLS, see [Corporate Networks](/self-hosting/corporate-networks).
+</Note>
+
+## Spaces and Collaboration
+
+Starting with Rallly v4.3.0, **Spaces** allow you to create collaborative workspaces where you can invite other users to work together on polls. Each Space has a seat limit based on your licensing tier:
+
+- **Personal**: Cannot invite other members (1 seat only)
+- **Plus**: Up to 5 members per Space
+- **Organization**: Up to 50 members per Space  
+- **Enterprise**: Up to 100 members per Space
+
+Members invited to a Space can create and manage polls within that workspace, making it easier for teams and organizations to collaborate on scheduling.
+
+## FAQ
+
+<Accordion title="What constitutes a user?">
+Only individuals with a **registered user account** on your Rallly instance count towards your user limit. People who participate in polls without being registered (i.e., guest voters) **do not** count as users for licensing purposes.
+
+When you invite someone to a Space, they become a member of that Space and count towards both your instance user limit and the Space's seat limit.
+</Accordion>
+
+<Accordion title="What happens if I exceed my user limit?">
+We operate an **honor system** for user limits. If you exceed your user limit, your instance will continue to function without any interruption. You'll simply see a friendly reminder asking you to upgrade to a higher tier.
+</Accordion>
+
+<Accordion title="Can I get an invoice?">
+Yes, an invoice is automatically generated for every purchase. You'll receive it via email shortly after your payment is processed.
+</Accordion>
+
+<Accordion title="Can I get a refund?">
+Our license keys provide perpetual access and cannot be "returned".
+Due to the nature of these licenses and the costs associated with processing transactions, we are unable to offer refunds.
+Issuing a refund would mean we incur a financial loss while you retain the perpetual license.
+</Accordion>
+
+<Accordion title="How much does an Enterprise license cost?">
+The Enterprise license is designed for organizations typically needing support for **more than 50 users**, or those with other specific requirements.
+
+Enterprise licenses start from **$999** and are **customized** based on the scale of your deployment and specific needs.
+We offer a **one-time perpetual license fee** that provides broad usage rights for your organization.
+This approach ensures you get a fair price tailored to your situation, rather than a fixed per-user calculation that may not be suitable for very large organizations.
+
+All Enterprise licenses include access to updates and priority support.
+
+To get started, please fill out our [Enterprise Requirements Survey](https://app.formbricks.com/s/cmebvnf2ohvjkt901eefxsonr) so we can better understand your needs and provide an accurate quote.
+
+You can also [contact us](/contact/support) directly to discuss your requirements.
+We're happy to work with you to find a solution that fits.
+</Accordion>
+
+<Accordion title="Do you offer discounts for nonprofits or schools?">
+No. Rallly licenses are priced to be affordable for small teams and organizations on tight budgets, so instead of offering discounts to some customers, we keep the price low for everyone.
+Charities, schools and community groups are also welcome to use the free **Personal** tier.
+</Accordion>
+
+
+If you have any questions about licensing, pricing, or which tier is right for you, please don't hesitate to [contact us](/contact/support).

@@ -1,0 +1,615 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.3.14/schema.json",
+  "extends": "//",
+  "overrides": [
+    {
+      "includes": ["src/**", "!src/app/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "dayjs": "Use the formatters in `@/lib/datetime` for display. dayjs is only allowed in files on the migration allowlist (see overrides in biome.json).",
+                  "@/lib/dayjs": "Use the formatters in `@/lib/datetime` for display. dayjs is only allowed in files on the migration allowlist (see overrides in biome.json).",
+                  "@rallly/database": "Database access is confined to the DAL: only features/**/data.ts and features/**/mutations.ts may import @rallly/database. Existing violations are on the migration allowlist (see overrides in apps/web/biome.json).",
+                  "@/lib/posthog": {
+                    "message": "User-attributed analytics events must go through track() from @/lib/posthog so guest person-profile handling cannot be forgotten at capture sites. The raw client is reserved for non-capture APIs (feature flags, identity merge) in allowlisted files (see overrides in apps/web/biome.json).",
+                    "importNames": ["posthog"]
+                  },
+                  "next/link": "Import { Link } from \"@/components/link\" instead: it defaults prefetch to false so viewport prefetches do not bill a server render per visible link. Sidebar nav uses HoverPrefetchLink."
+                },
+                "patterns": [
+                  {
+                    "group": ["@/app", "@/app/**"],
+                    "message": "Only files inside app/ may import from app/. Routes are thin adapters; shared code belongs in features/, components/, or lib/. Existing violations are on the migration allowlist (see overrides in apps/web/biome.json)."
+                  },
+                  {
+                    "group": ["@/utils", "@/utils/**"],
+                    "message": "src/utils is dissolved. Generic helpers live in @/lib/utils, infrastructure in @/lib, domain code in the owning feature."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["src/components/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "dayjs": "Use the formatters in `@/lib/datetime` for display. dayjs is only allowed in files on the migration allowlist (see overrides in biome.json).",
+                  "@/lib/dayjs": "Use the formatters in `@/lib/datetime` for display. dayjs is only allowed in files on the migration allowlist (see overrides in biome.json).",
+                  "@rallly/database": "Database access is confined to the DAL: only features/**/data.ts and features/**/mutations.ts may import @rallly/database. Existing violations are on the migration allowlist (see overrides in apps/web/biome.json).",
+                  "@/lib/posthog": {
+                    "message": "User-attributed analytics events must go through track() from @/lib/posthog so guest person-profile handling cannot be forgotten at capture sites. The raw client is reserved for non-capture APIs (feature flags, identity merge) in allowlisted files (see overrides in apps/web/biome.json).",
+                    "importNames": ["posthog"]
+                  },
+                  "next/link": "Import { Link } from \"@/components/link\" instead: it defaults prefetch to false so viewport prefetches do not bill a server render per visible link. Sidebar nav uses HoverPrefetchLink."
+                },
+                "patterns": [
+                  {
+                    "group": ["@/features/**"],
+                    "message": "components/ is domain-agnostic UI and must not depend on features/. Move domain components into features/<domain>/components/. Existing violations are on the migration allowlist (see overrides in apps/web/biome.json)."
+                  },
+                  {
+                    "group": ["@/app", "@/app/**"],
+                    "message": "Only files inside app/ may import from app/. Routes are thin adapters; shared code belongs in features/, components/, or lib/."
+                  },
+                  {
+                    "group": ["@/utils", "@/utils/**"],
+                    "message": "src/utils is dissolved. Generic helpers live in @/lib/utils, infrastructure in @/lib, domain code in the owning feature."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["src/lib/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "dayjs": "Use the formatters in `@/lib/datetime` for display. dayjs is only allowed in files on the migration allowlist (see overrides in biome.json).",
+                  "@/lib/dayjs": "Use the formatters in `@/lib/datetime` for display. dayjs is only allowed in files on the migration allowlist (see overrides in biome.json).",
+                  "@rallly/database": "Database access is confined to the DAL: only features/**/data.ts and features/**/mutations.ts may import @rallly/database. Existing violations are on the migration allowlist (see overrides in apps/web/biome.json).",
+                  "@/lib/posthog": {
+                    "message": "User-attributed analytics events must go through track() from @/lib/posthog so guest person-profile handling cannot be forgotten at capture sites. The raw client is reserved for non-capture APIs (feature flags, identity merge) in allowlisted files (see overrides in apps/web/biome.json).",
+                    "importNames": ["posthog"]
+                  },
+                  "next/link": "Import { Link } from \"@/components/link\" instead: it defaults prefetch to false so viewport prefetches do not bill a server render per visible link. Sidebar nav uses HoverPrefetchLink."
+                },
+                "patterns": [
+                  {
+                    "group": ["@/features/**", "@/components/**"],
+                    "message": "lib/ is the bottom layer (app -> features -> components -> lib) and must not import from features/ or components/. If this code needs domain logic, it belongs in a feature. Existing violations are on the migration allowlist (see overrides in apps/web/biome.json)."
+                  },
+                  {
+                    "group": ["@/app", "@/app/**"],
+                    "message": "Only files inside app/ may import from app/. Routes are thin adapters; shared code belongs in features/, components/, or lib/."
+                  },
+                  {
+                    "group": ["@/utils", "@/utils/**"],
+                    "message": "src/utils is dissolved. Generic helpers live in @/lib/utils, infrastructure in @/lib, domain code in the owning feature."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["src/app/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "dayjs": "Use the formatters in `@/lib/datetime` for display. dayjs is only allowed in files on the migration allowlist (see overrides in biome.json).",
+                  "@/lib/dayjs": "Use the formatters in `@/lib/datetime` for display. dayjs is only allowed in files on the migration allowlist (see overrides in biome.json).",
+                  "@rallly/database": "Database access is confined to the DAL: only features/**/data.ts and features/**/mutations.ts may import @rallly/database. Existing violations are on the migration allowlist (see overrides in apps/web/biome.json).",
+                  "@/lib/posthog": {
+                    "message": "User-attributed analytics events must go through track() from @/lib/posthog so guest person-profile handling cannot be forgotten at capture sites. The raw client is reserved for non-capture APIs (feature flags, identity merge) in allowlisted files (see overrides in apps/web/biome.json).",
+                    "importNames": ["posthog"]
+                  },
+                  "next/link": "Import { Link } from \"@/components/link\" instead: it defaults prefetch to false so viewport prefetches do not bill a server render per visible link. Sidebar nav uses HoverPrefetchLink."
+                },
+                "patterns": [
+                  {
+                    "group": ["@/features/**/data"],
+                    "message": "Pages, layouts and route components read through feature loaders (features/<domain>/loaders.ts), never data.ts directly \u2014 the loader owns the session gate that proves scope. Existing violations are on the migration allowlist (see overrides in apps/web/biome.json)."
+                  },
+                  {
+                    "group": ["@/utils", "@/utils/**"],
+                    "message": "src/utils is dissolved. Generic helpers live in @/lib/utils, infrastructure in @/lib, domain code in the owning feature."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "src/app/api/**",
+        "!src/app/api/trpc/**",
+        "!src/app/api/better-auth/**"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "dayjs": "Use the formatters in `@/lib/datetime` for display. dayjs is only allowed in files on the migration allowlist (see overrides in biome.json).",
+                  "@/lib/dayjs": "Use the formatters in `@/lib/datetime` for display. dayjs is only allowed in files on the migration allowlist (see overrides in biome.json).",
+                  "@rallly/database": "Database access is confined to the DAL: only features/**/data.ts and features/**/mutations.ts may import @rallly/database. Existing violations are on the migration allowlist (see overrides in apps/web/biome.json).",
+                  "@/lib/posthog": {
+                    "message": "User-attributed analytics events must go through track() from @/lib/posthog so guest person-profile handling cannot be forgotten at capture sites. The raw client is reserved for non-capture APIs (feature flags, identity merge) in allowlisted files (see overrides in apps/web/biome.json).",
+                    "importNames": ["posthog"]
+                  },
+                  "next/link": "Import { Link } from \"@/components/link\" instead: it defaults prefetch to false so viewport prefetches do not bill a server render per visible link. Sidebar nav uses HoverPrefetchLink."
+                },
+                "patterns": [
+                  {
+                    "group": ["@/features/**/loaders"],
+                    "message": "Loaders derive the actor from session cookies and must not be used in API routes. Webhooks, cron and API key routes authenticate their own way and pass proven scope to parameterized reads in data.ts."
+                  },
+                  {
+                    "group": ["@/utils", "@/utils/**"],
+                    "message": "src/utils is dissolved. Generic helpers live in @/lib/utils, infrastructure in @/lib, domain code in the owning feature."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "src/app/api/legacy/**",
+        "src/app/api/status/**",
+        "src/app/api/updates/**",
+        "src/app/api/private/**",
+        "src/app/api/middleware/**"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "dayjs": "Use the formatters in `@/lib/datetime` for display. dayjs is only allowed in files on the migration allowlist (see overrides in biome.json).",
+                  "@/lib/dayjs": "Use the formatters in `@/lib/datetime` for display. dayjs is only allowed in files on the migration allowlist (see overrides in biome.json).",
+                  "@/lib/posthog": {
+                    "message": "User-attributed analytics events must go through track() from @/lib/posthog so guest person-profile handling cannot be forgotten at capture sites. The raw client is reserved for non-capture APIs (feature flags, identity merge) in allowlisted files (see overrides in apps/web/biome.json).",
+                    "importNames": ["posthog"]
+                  },
+                  "next/link": "Import { Link } from \"@/components/link\" instead: it defaults prefetch to false so viewport prefetches do not bill a server render per visible link. Sidebar nav uses HoverPrefetchLink."
+                },
+                "patterns": [
+                  {
+                    "group": ["@/features/**/loaders"],
+                    "message": "Loaders derive the actor from session cookies and must not be used in API routes. Webhooks, cron and API key routes authenticate their own way and pass proven scope to parameterized reads in data.ts."
+                  },
+                  {
+                    "group": ["@/utils", "@/utils/**"],
+                    "message": "src/utils is dissolved. Generic helpers live in @/lib/utils, infrastructure in @/lib, domain code in the owning feature."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["src/app/**/actions.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "dayjs": "Use the formatters in `@/lib/datetime` for display. dayjs is only allowed in files on the migration allowlist (see overrides in biome.json).",
+                  "@/lib/dayjs": "Use the formatters in `@/lib/datetime` for display. dayjs is only allowed in files on the migration allowlist (see overrides in biome.json).",
+                  "@rallly/database": "Database access is confined to the DAL: only features/**/data.ts and features/**/mutations.ts may import @rallly/database. Existing violations are on the migration allowlist (see overrides in apps/web/biome.json).",
+                  "@/lib/posthog": {
+                    "message": "User-attributed analytics events must go through track() from @/lib/posthog so guest person-profile handling cannot be forgotten at capture sites. The raw client is reserved for non-capture APIs (feature flags, identity merge) in allowlisted files (see overrides in apps/web/biome.json).",
+                    "importNames": ["posthog"]
+                  },
+                  "next/link": "Import { Link } from \"@/components/link\" instead: it defaults prefetch to false so viewport prefetches do not bill a server render per visible link. Sidebar nav uses HoverPrefetchLink."
+                },
+                "patterns": [
+                  {
+                    "group": ["@/utils", "@/utils/**"],
+                    "message": "src/utils is dissolved. Generic helpers live in @/lib/utils, infrastructure in @/lib, domain code in the owning feature."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "src/app/*/(optional-space)/new/page.tsx",
+        "src/app/*/(space)/settings/preferences/components/date-time-preferences.tsx",
+        "src/app/*/accept-invite/*/page.tsx",
+        "src/app/*/control-panel/users/page.tsx",
+        "src/app/*/e/*/components/rsvp-area.tsx"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "dayjs": "Use the formatters in `@/lib/datetime` for display. dayjs is only allowed in files on the migration allowlist (see overrides in biome.json).",
+                  "@/lib/dayjs": "Use the formatters in `@/lib/datetime` for display. dayjs is only allowed in files on the migration allowlist (see overrides in biome.json).",
+                  "@/lib/posthog": {
+                    "message": "User-attributed analytics events must go through track() from @/lib/posthog so guest person-profile handling cannot be forgotten at capture sites. The raw client is reserved for non-capture APIs (feature flags, identity merge) in allowlisted files (see overrides in apps/web/biome.json).",
+                    "importNames": ["posthog"]
+                  },
+                  "next/link": "Import { Link } from \"@/components/link\" instead: it defaults prefetch to false so viewport prefetches do not bill a server render per visible link. Sidebar nav uses HoverPrefetchLink."
+                },
+                "patterns": [
+                  {
+                    "group": ["@/utils", "@/utils/**"],
+                    "message": "src/utils is dissolved. Generic helpers live in @/lib/utils, infrastructure in @/lib, domain code in the owning feature."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "src/app/*/(auth)/login/page.tsx",
+        "src/app/*/(auth)/login/verify/page.tsx",
+        "src/app/*/(optional-space)/layout.tsx",
+        "src/app/*/(space)/(dashboard)/layout.tsx",
+        "src/app/*/(space)/settings/api-keys/components/api-keys-list.tsx",
+        "src/app/*/(space)/settings/api-keys/page.tsx",
+        "src/app/*/(space)/settings/profile/components/account-deletion-summary.tsx",
+        "src/app/*/(space)/settings/security/page.tsx",
+        "src/app/*/(space)/settings/spaces/page.tsx",
+        "src/app/*/control-panel/license/page.tsx",
+        "src/app/*/control-panel/page.tsx",
+        "src/app/*/control-panel/settings/page.tsx",
+        "src/app/*/e/*/page.tsx",
+        "src/app/*/layout.tsx",
+        "src/app/*/setup/page.tsx"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "dayjs": "Use the formatters in `@/lib/datetime` for display. dayjs is only allowed in files on the migration allowlist (see overrides in biome.json).",
+                  "@/lib/dayjs": "Use the formatters in `@/lib/datetime` for display. dayjs is only allowed in files on the migration allowlist (see overrides in biome.json).",
+                  "@rallly/database": "Database access is confined to the DAL: only features/**/data.ts and features/**/mutations.ts may import @rallly/database. Existing violations are on the migration allowlist (see overrides in apps/web/biome.json).",
+                  "@/lib/posthog": {
+                    "message": "User-attributed analytics events must go through track() from @/lib/posthog so guest person-profile handling cannot be forgotten at capture sites. The raw client is reserved for non-capture APIs (feature flags, identity merge) in allowlisted files (see overrides in apps/web/biome.json).",
+                    "importNames": ["posthog"]
+                  },
+                  "next/link": "Import { Link } from \"@/components/link\" instead: it defaults prefetch to false so viewport prefetches do not bill a server render per visible link. Sidebar nav uses HoverPrefetchLink."
+                },
+                "patterns": [
+                  {
+                    "group": ["@/utils", "@/utils/**"],
+                    "message": "src/utils is dissolved. Generic helpers live in @/lib/utils, infrastructure in @/lib, domain code in the owning feature."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "src/trpc/trpc.ts",
+        "src/trpc/client/types.ts",
+        "src/trpc/routers/auth.ts",
+        "src/trpc/routers/dashboard.ts",
+        "src/trpc/routers/event-types.ts",
+        "src/trpc/routers/events.ts",
+        "src/trpc/routers/spaces.ts",
+        "src/trpc/routers/polls/comments.ts",
+        "src/trpc/routers/polls/participants.ts",
+        "src/features/licensing/actions.ts",
+        "src/features/poll/components/desktop-poll/participant-row.tsx",
+        "src/features/poll/components/mobile-poll/poll-option.tsx",
+        "src/features/poll/components/mobile-poll/poll-options.tsx",
+        "src/features/poll/components/new-participant-modal.tsx",
+        "src/features/poll/components/participants-provider.tsx",
+        "src/features/poll/components/poll-context.tsx",
+        "src/features/poll/components/poll-status-icon.tsx",
+        "src/features/poll/components/types.ts",
+        "src/features/poll/components/vote-icon.tsx",
+        "src/features/poll/components/vote-selector.tsx",
+        "src/features/scheduled-event/utils.ts",
+        "src/features/setup/utils.ts",
+        "src/features/space/actions.ts",
+        "src/features/space/utils.ts",
+        "src/features/user/ability.ts",
+        "src/features/user/actions.ts",
+        "src/features/user/schema.ts"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "dayjs": "Use the formatters in `@/lib/datetime` for display. dayjs is only allowed in files on the migration allowlist (see overrides in biome.json).",
+                  "@/lib/dayjs": "Use the formatters in `@/lib/datetime` for display. dayjs is only allowed in files on the migration allowlist (see overrides in biome.json).",
+                  "@/lib/posthog": {
+                    "message": "User-attributed analytics events must go through track() from @/lib/posthog so guest person-profile handling cannot be forgotten at capture sites. The raw client is reserved for non-capture APIs (feature flags, identity merge) in allowlisted files (see overrides in apps/web/biome.json).",
+                    "importNames": ["posthog"]
+                  },
+                  "next/link": "Import { Link } from \"@/components/link\" instead: it defaults prefetch to false so viewport prefetches do not bill a server render per visible link. Sidebar nav uses HoverPrefetchLink."
+                },
+                "patterns": [
+                  {
+                    "group": ["@/app", "@/app/**"],
+                    "message": "Only files inside app/ may import from app/. Routes are thin adapters; shared code belongs in features/, components/, or lib/. Existing violations are on the migration allowlist (see overrides in apps/web/biome.json)."
+                  },
+                  {
+                    "group": ["@/utils", "@/utils/**"],
+                    "message": "src/utils is dissolved. Generic helpers live in @/lib/utils, infrastructure in @/lib, domain code in the owning feature."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["src/components/time-format-picker.tsx"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "dayjs": "Use the formatters in `@/lib/datetime` for display. dayjs is only allowed in files on the migration allowlist (see overrides in biome.json).",
+                  "@/lib/dayjs": "Use the formatters in `@/lib/datetime` for display. dayjs is only allowed in files on the migration allowlist (see overrides in biome.json).",
+                  "@/lib/posthog": {
+                    "message": "User-attributed analytics events must go through track() from @/lib/posthog so guest person-profile handling cannot be forgotten at capture sites. The raw client is reserved for non-capture APIs (feature flags, identity merge) in allowlisted files (see overrides in apps/web/biome.json).",
+                    "importNames": ["posthog"]
+                  },
+                  "next/link": "Import { Link } from \"@/components/link\" instead: it defaults prefetch to false so viewport prefetches do not bill a server render per visible link. Sidebar nav uses HoverPrefetchLink."
+                },
+                "patterns": [
+                  {
+                    "group": ["@/features/**"],
+                    "message": "components/ is domain-agnostic UI and must not depend on features/. Move domain components into features/<domain>/components/. Existing violations are on the migration allowlist (see overrides in apps/web/biome.json)."
+                  },
+                  {
+                    "group": ["@/app", "@/app/**"],
+                    "message": "Only files inside app/ may import from app/. Routes are thin adapters; shared code belongs in features/, components/, or lib/."
+                  },
+                  {
+                    "group": ["@/utils", "@/utils/**"],
+                    "message": "src/utils is dissolved. Generic helpers live in @/lib/utils, infrastructure in @/lib, domain code in the owning feature."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "src/features/**/data.ts",
+        "src/features/**/mutations.ts",
+        "!src/features/**/components/**"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "dayjs": "Use the formatters in `@/lib/datetime` for display. dayjs is only allowed in files on the migration allowlist (see overrides in biome.json).",
+                  "@/lib/dayjs": "Use the formatters in `@/lib/datetime` for display. dayjs is only allowed in files on the migration allowlist (see overrides in biome.json).",
+                  "next/headers": "The DAL core trusts its input: data.ts and mutations.ts take explicit parameters and never read the request. Session and request facing reads belong in loaders.ts, writes resolve their actor in actions.ts.",
+                  "next/navigation": "The DAL core trusts its input: data.ts and mutations.ts take explicit parameters and never redirect. Page semantics (redirects) belong in loaders.ts or the route.",
+                  "@/lib/posthog": {
+                    "message": "User-attributed analytics events must go through track() from @/lib/posthog so guest person-profile handling cannot be forgotten at capture sites. The raw client is reserved for non-capture APIs (feature flags, identity merge) in allowlisted files (see overrides in apps/web/biome.json).",
+                    "importNames": ["posthog"]
+                  },
+                  "next/link": "Import { Link } from \"@/components/link\" instead: it defaults prefetch to false so viewport prefetches do not bill a server render per visible link. Sidebar nav uses HoverPrefetchLink."
+                },
+                "patterns": [
+                  {
+                    "group": ["@/app", "@/app/**"],
+                    "message": "Only files inside app/ may import from app/. Routes are thin adapters; shared code belongs in features/, components/, or lib/. Existing violations are on the migration allowlist (see overrides in apps/web/biome.json)."
+                  },
+                  {
+                    "group": ["@/utils", "@/utils/**"],
+                    "message": "src/utils is dissolved. Generic helpers live in @/lib/utils, infrastructure in @/lib, domain code in the owning feature."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "src/features/billing/components/pay-wall-dialog.tsx",
+        "src/lib/auth.ts",
+        "src/lib/feature-flags/config.ts",
+        "src/lib/safe-action/server.ts"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "dayjs": "Use the formatters in `@/lib/datetime` for display. dayjs is only allowed in files on the migration allowlist (see overrides in biome.json).",
+                  "@/lib/dayjs": "Use the formatters in `@/lib/datetime` for display. dayjs is only allowed in files on the migration allowlist (see overrides in biome.json).",
+                  "@/lib/posthog": {
+                    "message": "User-attributed analytics events must go through track() from @/lib/posthog so guest person-profile handling cannot be forgotten at capture sites. The raw client is reserved for non-capture APIs (feature flags, identity merge) in allowlisted files (see overrides in apps/web/biome.json).",
+                    "importNames": ["posthog"]
+                  },
+                  "next/link": "Import { Link } from \"@/components/link\" instead: it defaults prefetch to false so viewport prefetches do not bill a server render per visible link. Sidebar nav uses HoverPrefetchLink."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "src/features/auth/mutations.ts",
+        "src/features/billing/webhook/mutations.ts",
+        "src/features/api-keys/data.ts"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "dayjs": "Use the formatters in `@/lib/datetime` for display. dayjs is only allowed in files on the migration allowlist (see overrides in biome.json).",
+                  "@/lib/dayjs": "Use the formatters in `@/lib/datetime` for display. dayjs is only allowed in files on the migration allowlist (see overrides in biome.json).",
+                  "next/link": "Import { Link } from \"@/components/link\" instead: it defaults prefetch to false so viewport prefetches do not bill a server render per visible link. Sidebar nav uses HoverPrefetchLink."
+                },
+                "patterns": [
+                  {
+                    "group": ["@/app", "@/app/**"],
+                    "message": "Only files inside app/ may import from app/. Routes are thin adapters; shared code belongs in features/, components/, or lib/. Existing violations are on the migration allowlist (see overrides in apps/web/biome.json)."
+                  },
+                  {
+                    "group": ["@/utils", "@/utils/**"],
+                    "message": "src/utils is dissolved. Generic helpers live in @/lib/utils, infrastructure in @/lib, domain code in the owning feature."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "src/lib/dayjs.ts",
+        "src/lib/datetime/**",
+        "src/features/poll/components/forms/poll-options-form/**",
+        "src/components/headless-date-picker.tsx",
+        "src/trpc/routers/polls.ts",
+        "src/lib/utils/date-time-utils.ts",
+        "src/features/poll/components/manage-poll/use-csv-exporter.ts",
+        "src/test/setup.ts"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "src/features/**",
+        "!src/features/**/components/**",
+        "!src/features/**/assets/**"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "useFilenamingConvention": {
+              "level": "warn",
+              "options": {
+                "match": "(?:data|loaders|mutations|actions|schema|types|ability|constants|utils|service)[.]ts|client[.]tsx|.+[.]test[.]tsx?",
+                "filenameCases": ["kebab-case"]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "src/components/link.tsx",
+        "src/components/hover-prefetch-link.tsx"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "dayjs": "Use the formatters in `@/lib/datetime` for display. dayjs is only allowed in files on the migration allowlist (see overrides in biome.json).",
+                  "@/lib/dayjs": "Use the formatters in `@/lib/datetime` for display. dayjs is only allowed in files on the migration allowlist (see overrides in biome.json).",
+                  "@rallly/database": "Database access is confined to the DAL: only features/**/data.ts and features/**/mutations.ts may import @rallly/database. Existing violations are on the migration allowlist (see overrides in apps/web/biome.json).",
+                  "@/lib/posthog": {
+                    "message": "User-attributed analytics events must go through track() from @/lib/posthog so guest person-profile handling cannot be forgotten at capture sites. The raw client is reserved for non-capture APIs (feature flags, identity merge) in allowlisted files (see overrides in apps/web/biome.json).",
+                    "importNames": ["posthog"]
+                  }
+                },
+                "patterns": [
+                  {
+                    "group": ["@/features/**"],
+                    "message": "components/ is domain-agnostic UI and must not depend on features/. Move domain components into features/<domain>/components/. Existing violations are on the migration allowlist (see overrides in apps/web/biome.json)."
+                  },
+                  {
+                    "group": ["@/app", "@/app/**"],
+                    "message": "Only files inside app/ may import from app/. Routes are thin adapters; shared code belongs in features/, components/, or lib/."
+                  },
+                  {
+                    "group": ["@/utils", "@/utils/**"],
+                    "message": "src/utils is dissolved. Generic helpers live in @/lib/utils, infrastructure in @/lib, domain code in the owning feature."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

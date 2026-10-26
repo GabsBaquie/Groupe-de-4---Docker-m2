@@ -1,0 +1,124 @@
+# Contributing Guide
+
+Contributions are welcome from anyone who is interested in improving this project and there are multiple ways in which you can contribute.
+
+## Code 🧑‍💻
+
+Have a look at the [open issues](https://github.com/lukevella/rallly/issues) and look for issues that are labeled with `help wanted` or `good first issue`. If you find an issue that you would like to work on, please leave a comment on the issue to let us know.
+
+If there isn't an issue for the work that you would like to contribute, start by opening a [discussion](https://github.com/lukevella/rallly/discussions/new/choose) to discuss the changes that you would like to make.
+
+In order to maintain a high standard of code quality, please ensure that you are familiar with the technology stack used in this project where it applies to your code. The technology stack used in this project is:
+
+- [TypeScript](https://www.typescriptlang.org/)
+- [React](https://reactjs.org/)
+- [Next.js](https://nextjs.org/)
+- [Tailwind CSS](https://tailwindcss.com/)
+- [tRPC](https://trpc.io/)
+- [Prisma](https://www.prisma.io/)
+
+## Local development 🧑‍🔧
+
+The following instructions are for running the project locally for development.
+
+1. Clone the repository and switch to the project directory
+
+   ```bash
+   git clone https://github.com/lukevella/rallly.git
+   cd rallly
+   ```
+
+2. Install dependencies
+
+   ```bash
+   pnpm install
+   ```
+
+3. Setup environment variables
+
+   Copy the sample environment file and fill in the required values:
+
+   ```bash
+   cp apps/web/.env.sample apps/web/.env
+   cp packages/database/.env.sample packages/database/.env
+   ```
+
+   See [configuration options](https://support.rallly.co/self-hosting/configuration-options) for a full list of available options.
+
+4. Generate Prisma client
+
+   ```bash
+   pnpm db:generate
+   ```
+
+5. Setup database
+
+   You will need to have [Docker](https://docs.docker.com/get-docker/) installed and running to run the database using the provided docker-compose file.
+
+   To start the database, run:
+
+   ```bash
+   pnpm docker:up
+   ```
+
+   Next run the following command to setup the database:
+
+   ```bash
+   pnpm db:reset && pnpm db:seed
+   ```
+
+   This will:
+
+   - delete the existing database (if it exists)
+   - run migrations to create a new database schema
+   - seed the database with test users and random data
+
+6. Start the portless proxy
+
+   The dev scripts route the apps through [portless](https://portless.sh), which exposes them at stable HTTPS URLs (e.g. `https://web.rallly.localhost`) instead of `localhost:<port>`.
+
+   The proxy starts automatically the first time you run a dev script, so this step is usually unnecessary. To start it manually:
+
+   ```bash
+   pnpm proxy:start
+   ```
+
+7. Start the Next.js server
+
+   ```bash
+   pnpm dev
+   ```
+
+   The app is served at `https://web.rallly.localhost`, and the landing page at `https://landing.rallly.localhost`.
+
+   In a git worktree, portless prepends the branch name automatically, so every worktree gets its own host (e.g. `https://my-feature.web.rallly.localhost`) and several dev servers can run side by side without colliding. Portless prints the URL on startup.
+
+   The dev script exports the URL portless assigned as `NEXT_PUBLIC_BASE_URL` and `DEV_DOMAIN`, so links, assets, auth callbacks and the Next.js dev-origin allowlist follow the host automatically — nothing to configure per worktree. Because these are set in the shell, they take precedence over any `NEXT_PUBLIC_BASE_URL` in `.env`.
+
+## Translations 🌐
+
+To contribute translations, please check out our [guide for translators](https://support.rallly.co/contribute/translations) which contains all the information you need to get started.
+
+## Becoming a Sponsor 💰
+
+If you find this project useful and would like to contribute financially on an ongoing basis, please consider becoming a sponsor. Sponsors help us cover the costs of hosting, development, and maintenance, and enable us to continue working on the project.
+
+To become a sponsor, visit our [sponsor page](https://github.com/sponsors/lukevella) and select the sponsorship level that works for you.
+
+Donations are also accepted through [PayPal](http://paypal.me/ralllyco).
+
+## Documentation
+
+To contribute documentation please check out the [contributing guide](https://support.rallly.co/contribute/documentation) which contains all the information you need to get started.
+
+## Code of Conduct 👮‍♀️
+
+Please note that this project is released with a [Code of Conduct](CODE_OF_CONDUCT.md). By participating in this project, you agree to abide by its terms.
+
+## Contributor License Agreement 👩‍⚖️
+
+Before we can merge your first pull request, you need to sign our [Contributor License Agreement](https://cla-assistant.io/lukevella/rallly). The CLA assistant bot comments on your pull request with a link. You sign once with your GitHub account and it covers all your future contributions.
+
+By signing, you license your contribution under the same license as the project, currently [AGPL-3.0](LICENSE), and you grant the project maintainers the irrevocable right to relicense it, including under other open source or proprietary licenses. You keep the copyright in your work. Read the [full agreement](https://cla-assistant.io/lukevella/rallly) before you sign.
+
+Thank you for your interest in contributing to this project!

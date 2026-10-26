@@ -1,0 +1,139 @@
+import { buttonVariants } from "@rallly/ui";
+import { CheckIcon, PlusIcon, ZapIcon } from "lucide-react";
+import { Trans } from "react-i18next/TransWithoutContext";
+import { Link } from "@/components/link";
+
+import { PollPageIcon } from "@/components/page-icons";
+import { getGuestPolls } from "@/features/quick-create/data";
+import { getTranslation } from "@/i18n/server";
+
+import { RelativeDate } from "./relative-date";
+
+export async function QuickCreateWidget() {
+  const polls = await getGuestPolls();
+  const { t, i18n } = await getTranslation();
+  return (
+    <div className="space-y-8">
+      <div className="space-y-6">
+        <div className="inline-flex items-center justify-center gap-2 rounded-md font-medium text-primary">
+          <ZapIcon className="size-5" />
+          <h2>
+            <Trans
+              t={t}
+              i18n={i18n}
+              ns="app"
+              i18nKey="quickCreate"
+              defaults="Quick Create"
+            />
+          </h2>
+        </div>
+        <p className="text-pretty text-muted-foreground">
+          <Trans
+            t={t}
+            i18n={i18n}
+            ns="app"
+            i18nKey="quickActionsDescription"
+            defaults="Create a group poll without signing in. Login later to link it to your account."
+          />
+        </p>
+        {polls.length > 0 ? (
+          <div className="space-y-4">
+            <h3 className="font-semibold">
+              <Trans
+                t={t}
+                i18n={i18n}
+                ns="app"
+                i18nKey="quickCreateRecentlyCreated"
+                defaults="Recently created"
+              />
+            </h3>
+            <ul className="space-y-2">
+              {polls.map((poll) => (
+                <li key={poll.id}>
+                  <Link
+                    href={`/poll/${poll.id}`}
+                    className="flex items-center gap-3 rounded-2xl border border-card-border bg-card p-3 hover:bg-card-accent"
+                  >
+                    <div>
+                      <PollPageIcon size="xl" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate font-medium">{poll.title}</div>
+                      <div className="whitespace-nowrap text-muted-foreground text-sm">
+                        <RelativeDate date={poll.createdAt} />
+                      </div>
+                    </div>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+        <div>
+          <Link
+            href="/new"
+            className={buttonVariants({
+              size: "xl",
+              shape: "rounded",
+              className: "w-full",
+            })}
+          >
+            <PlusIcon data-icon="inline-start" />
+            <Trans
+              t={t}
+              i18n={i18n}
+              ns="app"
+              i18nKey="quickCreateGroupPoll"
+              defaults="Create group poll"
+            />
+          </Link>
+        </div>
+      </div>
+      <div className="space-y-4">
+        <div className="flex items-center gap-2">
+          <h3 className="font-semibold">
+            <Trans
+              t={t}
+              i18n={i18n}
+              ns="app"
+              i18nKey="quickCreateWhyCreateAnAccount"
+              defaults="Why create an account?"
+            />
+          </h3>
+        </div>
+        <ul className="space-y-2 text-muted-foreground">
+          <li className="flex items-center gap-2">
+            <CheckIcon className="size-5 text-green-600 dark:text-green-500" />
+            <Trans
+              t={t}
+              i18n={i18n}
+              ns="app"
+              i18nKey="quickCreateSecurePolls"
+              defaults="Secure access through your account"
+            />
+          </li>
+          <li className="flex items-center gap-2">
+            <CheckIcon className="size-5 text-green-600 dark:text-green-500" />
+            <Trans
+              t={t}
+              i18n={i18n}
+              ns="app"
+              i18nKey="quickCreateGetNotifications"
+              defaults="Get email notifications"
+            />
+          </li>
+          <li className="flex items-center gap-2">
+            <CheckIcon className="size-5 text-green-600 dark:text-green-500" />
+            <Trans
+              t={t}
+              i18n={i18n}
+              ns="app"
+              i18nKey="quickCreateManagePollsFromAnyDevice"
+              defaults="Manage your polls from any device"
+            />
+          </li>
+        </ul>
+      </div>
+    </div>
+  );
+}

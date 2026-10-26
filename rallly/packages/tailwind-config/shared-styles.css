@@ -1,0 +1,478 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+/* A dialog header or footer at the top level of the dialog's scroll area
+ * (directly, or inside a top-level form or wizard step), where it spans the
+ * dialog's edges. */
+@custom-variant dialog-edge (:is(
+    [data-slot="dialog-scroller"],
+    [data-slot="dialog-scroller"] > form,
+    [data-slot="dialog-scroller"] > [data-slot="dialog-step"]
+  )
+  > &);
+
+@plugin "@tailwindcss/typography";
+@plugin "tailwindcss-animate";
+@plugin "tailwind-scrollbar";
+
+@source "../../packages/ui/src/**/*.{ts,tsx}";
+
+:root {
+  /* Hue of the --color-gray-* scale in @theme; change both together */
+  --gray-hue: 286.033;
+
+  --radius: 0.625rem;
+  --primary: var(--primary-light, var(--color-indigo-600));
+  --primary-foreground: var(--primary-light-foreground, var(--color-white));
+  --state-shade: black;
+
+  --button-outline: rgba(0, 0, 0, 0.1);
+  --menu-item-outline: rgba(0, 0, 0, 0.05);
+
+  --border: var(--color-gray-200);
+  --border-muted: var(--color-gray-100);
+
+  --input: var(--color-gray-200);
+  --input-foreground: var(--color-gray-800);
+
+  --ring: var(--color-gray-500);
+
+  --destructive: var(--color-rose-600);
+  --destructive-foreground: var(--color-rose-100);
+
+  --background: var(--color-white);
+  --foreground: var(--color-gray-800);
+
+  --accent: color-mix(in oklab, var(--color-gray-500) 10%, transparent);
+  --accent-border: var(--color-gray-300);
+  --accent-foreground: var(--color-gray-800);
+
+  --action-bar: var(--color-gray-800);
+  --action-bar-border: var(--color-gray-700);
+  --action-bar-foreground: var(--color-gray-100);
+
+  --muted: var(--color-gray-100);
+  --muted-foreground: var(--color-gray-600);
+  --muted-border: var(--color-gray-200);
+
+  --popover: var(--color-white);
+  --popover-foreground: var(--color-gray-800);
+  --popover-accent: color-mix(in oklab, var(--color-gray-500) 10%, transparent);
+  --popover-border: var(--color-gray-200);
+
+  --card: var(--color-white);
+  --card-border: var(--color-gray-200);
+  --card-accent: rgba(0, 0, 0, 0.02);
+  --card-foreground: var(--color-gray-800);
+
+  --sidebar: var(--color-gray-50);
+  --sidebar-foreground: var(--color-gray-800);
+  --sidebar-border: var(--color-gray-200);
+
+  --sidebar-accent: var(--color-gray-100);
+  --sidebar-accent-foreground: var(--color-gray-800);
+}
+
+.dark {
+  --background: var(--color-gray-900);
+  --foreground: var(--color-white);
+
+  --button-outline: rgba(255, 255, 255, 0.05);
+  --menu-item-outline: rgba(255, 255, 255, 0.05);
+
+  --primary: var(--primary-dark, var(--color-indigo-500));
+  --primary-foreground: var(--primary-dark-foreground, var(--color-white));
+  --state-shade: white;
+
+  --sidebar: var(--color-gray-900);
+  --sidebar-foreground: var(--color-gray-100);
+  --sidebar-border: var(--color-gray-800);
+
+  --sidebar-accent: var(--color-gray-800);
+  --sidebar-accent-foreground: var(--color-gray-50);
+
+  --border: oklch(0.32 0.006 var(--gray-hue));
+  --border-muted: var(--color-gray-800);
+
+  --input: rgba(255, 255, 255, 0.1);
+  --input-foreground: var(--color-gray-100);
+
+  --ring: var(--color-gray-600);
+
+  --destructive: var(--color-rose-500);
+  --destructive-foreground: var(--color-rose-50);
+
+  --accent: oklch(1 0 0 / 0.1);
+  --accent-border: var(--color-gray-600);
+  --accent-foreground: var(--color-gray-100);
+
+  --muted: var(--color-gray-800);
+  --muted-foreground: var(--color-gray-300);
+  --muted-border: var(--color-gray-700);
+
+  --popover: var(--color-gray-800);
+  --popover-border: var(--color-gray-700);
+  --popover-foreground: var(--color-gray-100);
+  --popover-accent: var(--color-gray-700);
+
+  --card: oklch(0.24 0.006 var(--gray-hue));
+  --card-border: var(--color-gray-700);
+  --card-foreground: var(--color-white);
+  --card-accent: oklch(0.26 0.006 var(--gray-hue));
+}
+
+/*
+ * Surface-relative card: inside an elevated surface (dialog, popover) a card
+ * steps once more away from that surface — darker in light mode, lighter in
+ * dark mode — so it never blends into the surface it sits on. Works because
+ * the card utilities resolve var(--card) at the element (@theme inline), so
+ * the nearest surface's override wins through normal CSS inheritance.
+ */
+:where([data-slot="dialog-content"], [data-slot="popover-content"]) {
+  --card: var(--color-gray-50);
+}
+
+.dark :where([data-slot="dialog-content"], [data-slot="popover-content"]) {
+  --card: oklch(0.31 0.006 var(--gray-hue));
+}
+
+@theme inline {
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  /*
+   * Interaction states shift the shade of the opaque brand colour (darker on
+   * light, lighter on dark) instead of fading it. Mixed at the element so
+   * nested --primary overrides (white-label, branding preview) pick them up.
+   */
+  --color-primary-hover: color-mix(
+    in oklch,
+    var(--primary),
+    var(--state-shade) 8%
+  );
+  --color-primary-active: color-mix(
+    in oklch,
+    var(--primary),
+    var(--state-shade) 14%
+  );
+
+  --color-button-outline: var(--button-outline);
+  --color-menu-item-outline: var(--menu-item-outline);
+
+  --color-border: var(--border);
+  --color-border-muted: var(--border-muted);
+
+  --color-input: var(--input);
+  --color-input-foreground: var(--input-foreground);
+
+  --color-ring: var(--ring);
+
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-destructive-hover: color-mix(
+    in oklch,
+    var(--destructive),
+    var(--state-shade) 8%
+  );
+  --color-destructive-active: color-mix(
+    in oklch,
+    var(--destructive),
+    var(--state-shade) 14%
+  );
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+
+  --color-accent: var(--accent);
+  --color-accent-border: var(--accent-border);
+  --color-accent-foreground: var(--accent-foreground);
+
+  --color-action-bar: var(--action-bar);
+  --color-action-bar-border: var(--action-bar-border);
+  --color-action-bar-foreground: var(--action-bar-foreground);
+
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted-border: var(--muted-border);
+
+  --color-popover: var(--popover);
+  --color-popover-border: var(--popover-border);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover-accent: var(--popover-accent);
+
+  --color-card: var(--card);
+  --color-card-border: var(--card-border);
+  --color-card-accent: var(--card-accent);
+  --color-card-foreground: var(--card-foreground);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+}
+
+@theme {
+  --shadow-huge:
+    0px 51px 78px rgb(17 7 53 / 5%), 0px 21.3066px 35.4944px rgb(17 7 53 / 4%),
+    0px 11.3915px 18.9418px rgb(17 7 53 / 3%),
+    0px 6.38599px 9.8801px rgb(17 7 53 / 3%),
+    0px 3.39155px 4.58665px rgb(17 7 53 / 2%),
+    0px 1.4113px 1.55262px rgb(17 7 53 / 1%),
+    inset 0px 1px 0px rgb(41 56 78 / 5%);
+
+  --breakpoint-xs: 375px;
+
+  --ease-in-expo: cubic-bezier(0.68, -0.6, 0.32, 1.6);
+  --ease-out-expo: cubic-bezier(0.19, 1, 0.22, 1);
+  /* Strong ease-out for UI that enters or changes value. */
+  --ease-out-ui: cubic-bezier(0.23, 1, 0.32, 1);
+
+  --animate-caret-blink: caret-blink 1.25s ease-out infinite;
+  --animate-switch-thumb-on: switch-thumb-on 350ms
+    cubic-bezier(0.34, 1.35, 0.64, 1) both;
+  --animate-switch-thumb-off: switch-thumb-off 350ms
+    cubic-bezier(0.34, 1.35, 0.64, 1) both;
+
+  @keyframes switch-thumb-on {
+    0% {
+      translate: 0 0;
+    }
+    55% {
+      translate: calc(var(--switch-travel) + 1px) 0;
+    }
+    80%,
+    100% {
+      translate: var(--switch-travel) 0;
+    }
+  }
+
+  @keyframes switch-thumb-off {
+    0% {
+      translate: var(--switch-travel) 0;
+    }
+    55% {
+      translate: -1px 0;
+    }
+    80%,
+    100% {
+      translate: 0 0;
+    }
+  }
+
+  @keyframes caret-blink {
+    0%,
+    70%,
+    100% {
+      opacity: 1;
+    }
+    20%,
+    50% {
+      opacity: 0;
+    }
+  }
+
+  --font-sans:
+    var(--font-inter), ui-sans-serif, system-ui, sans-serif,
+    "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+
+  --color-gray-50: var(--color-zinc-50);
+  --color-gray-100: var(--color-zinc-100);
+  --color-gray-200: var(--color-zinc-200);
+  --color-gray-300: var(--color-zinc-300);
+  --color-gray-400: var(--color-zinc-400);
+  --color-gray-500: var(--color-zinc-500);
+  --color-gray-600: var(--color-zinc-600);
+  --color-gray-700: var(--color-zinc-700);
+  --color-gray-800: var(--color-zinc-800);
+  --color-gray-900: var(--color-zinc-900);
+  --color-gray-950: var(--color-zinc-950);
+}
+
+/*
+  The default border color has changed to `currentcolor` in Tailwind CSS v4,
+  so we've added these compatibility styles to make sure everything still
+  looks the same as it did with Tailwind CSS v3.
+
+  If we ever want to remove these styles, we need to add an explicit border
+  color utility to any element that depends on these defaults.
+*/
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-border, currentcolor);
+  }
+}
+
+@utility text-link {
+  @apply text-primary rounded-md font-medium outline-hidden hover:underline focus:outline-hidden focus-visible:ring-2 focus-visible:ring-offset-1;
+}
+
+/* Link variant for colored or component-owned surfaces. It inherits the
+ * surface text color instead of the space's brand color. The brand color is
+ * customer-chosen, so the surface cannot predict it and it can fail contrast. */
+@utility text-link-inherit {
+  @apply rounded-md font-medium text-current outline-hidden hover:underline focus:outline-hidden focus-visible:ring-2 focus-visible:ring-offset-1;
+}
+
+@layer utilities {
+  :root {
+    --spacing: 0.25rem;
+  }
+}
+
+/* iOS Safari zooms the page whenever a focused field is under 16px. The whole
+ * type scale grows by 8/7 on touch devices, the factor that lands text-sm on
+ * 16px exactly, so fields and the copy around them keep their proportions.
+ * Line heights are unitless ratios and follow the size on their own. */
+@layer base {
+  @media (pointer: coarse) {
+    :root {
+      --text-xs: calc(0.75rem * 8 / 7);
+      --text-sm: calc(0.875rem * 8 / 7);
+      --text-base: calc(1rem * 8 / 7);
+      --text-lg: calc(1.125rem * 8 / 7);
+      --text-xl: calc(1.25rem * 8 / 7);
+      --text-2xl: calc(1.5rem * 8 / 7);
+      --text-3xl: calc(1.875rem * 8 / 7);
+      --text-4xl: calc(2.25rem * 8 / 7);
+      --text-5xl: calc(3rem * 8 / 7);
+      --text-6xl: calc(3.75rem * 8 / 7);
+      --text-7xl: calc(4.5rem * 8 / 7);
+    }
+  }
+}
+
+@layer base {
+  body {
+    @apply text-base text-foreground bg-background;
+    font-feature-settings:
+      "rlig" 1,
+      "calt" 1;
+  }
+  body:has([data-sidebar="wrapper"]) {
+    @apply bg-sidebar;
+  }
+  html.light body:has(.page-bg-gray-100) {
+    @apply bg-gray-100;
+  }
+  html.light body:has(.page-bg-gray-50) {
+    @apply bg-gray-50;
+  }
+  /* The type scale is rem based, so html keeps the browser's 16px root and
+   * the token lands on body, where scaling it cannot feed back into rem. */
+  html {
+    @apply h-full font-sans text-gray-700;
+    /* Preflight hides the native tap highlight, which leaves links and other
+     * tappable elements with no press feedback on touch devices (hover:
+     * never fires there). Restore a subtle one; components with their own
+     * active: styles opt out. */
+    -webkit-tap-highlight-color: var(--accent);
+  }
+  *,
+  ::before,
+  ::after {
+    @apply outline-ring;
+  }
+  :focus-visible {
+    @apply outline-2 outline-offset-2;
+  }
+}
+
+/*
+ * Success check appear transition (Transitions.dev). The wrapper drives
+ * fade + rotate + blur + Y bob in parallel; an SVG <path> inside gets the
+ * stroke draw. Give the path pathLength="20" so the dash values fit any
+ * shape. Cold load is data-state="out" (invisible); set "in" to play.
+ */
+:root {
+  --check-opacity-dur: 500ms;
+  --check-rotate-dur: 500ms;
+  --check-rotate-from: 80deg;
+  --check-bob-dur: 500ms;
+  --check-y-amount: 40px;
+  --check-blur-dur: 500ms;
+  --check-blur-from: 10px;
+  --check-path-dur: 500ms;
+  --check-path-delay: 80ms;
+  --check-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --check-ease-bob: cubic-bezier(0.34, 1.35, 0.64, 1);
+}
+
+.t-success-check {
+  display: inline-block;
+  transform-origin: center;
+  opacity: 0;
+  will-change: transform, opacity, filter;
+}
+.t-success-check svg {
+  display: block;
+  overflow: visible;
+}
+.t-success-check svg path {
+  stroke-dasharray: 20;
+  stroke-dashoffset: 20;
+}
+.t-success-check[data-state="in"] {
+  animation:
+    t-check-fade var(--check-opacity-dur) var(--check-ease-out) forwards,
+    t-check-rotate var(--check-rotate-dur) var(--check-ease-out) forwards,
+    t-check-blur var(--check-blur-dur) var(--check-ease-out) forwards,
+    t-check-bob var(--check-bob-dur) var(--check-ease-bob) forwards;
+}
+.t-success-check[data-state="in"] svg path {
+  animation: t-check-draw var(--check-path-dur) var(--check-ease-out)
+    var(--check-path-delay) forwards;
+}
+
+@keyframes t-check-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes t-check-rotate {
+  from {
+    transform: rotate(var(--check-rotate-from));
+  }
+  to {
+    transform: rotate(0deg);
+  }
+}
+@keyframes t-check-blur {
+  from {
+    filter: blur(var(--check-blur-from));
+  }
+  to {
+    filter: blur(0);
+  }
+}
+@keyframes t-check-bob {
+  from {
+    translate: 0 var(--check-y-amount);
+  }
+  to {
+    translate: 0 0;
+  }
+}
+@keyframes t-check-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t-success-check[data-state="in"] {
+    animation: none;
+    opacity: 1;
+  }
+  .t-success-check[data-state="in"] svg path {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+}

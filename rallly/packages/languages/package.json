@@ -1,0 +1,17 @@
+{
+  "name": "@rallly/languages",
+  "version": "0.0.0",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "dependencies": {
+    "@formatjs/intl-localematcher": "^0.6.0",
+    "negotiator": "^1.0.0"
+  },
+  "devDependencies": {
+    "@rallly/tsconfig": "workspace:*",
+    "@types/negotiator": "^0.6.3"
+  }
+}

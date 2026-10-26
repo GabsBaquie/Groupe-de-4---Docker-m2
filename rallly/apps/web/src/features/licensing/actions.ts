@@ -1,0 +1,117 @@
+"use server";
+
+import { prisma } from "@rallly/database";
+import { createLogger } from "@rallly/logger";
+import { updateTag } from "next/cache";
+import { INSTANCE_LICENSE_TAG } from "@/features/licensing/constants";
+import { validateLicenseKeyInputSchema } from "@/features/licensing/schema";
+import { AppError } from "@/lib/errors/app-error";
+import { adminActionClient } from "@/lib/safe-action/server";
+import { licenseManager, setInstanceLicense } from "./mutations";
+
+const logger = createLogger("licensing/actions");
+
+export const removeInstanceLicenseAction = adminActionClient
+  .metadata({
+    actionName: "remove_instance_license",
+  })
+  .action(async () => {
+    try {
+      await prisma.instanceLicense.deleteMany();
+      updateTag(INSTANCE_LICENSE_TAG);
+    } catch (error) {
+      logger.error({ error }, "Failed to delete instance license");
+      return {
+        success: false,
+        message: "Failed to delete license",
+      };
+    }
+
+    return {
+      success: true,
+      message: "License deleted successfully",
+    };
+  });
+
+export const refreshInstanceLicenseAction = adminActionClient
+  .metadata({
+    actionName: "refresh_instance_license",
+  })
+  .action(async () => {
+    try {
+      const instanceLicense = await prisma.instanceLicense.findFirst({
+        orderBy: {
+          id: "asc",
+        },
+      });
+
+      if (!instanceLicense) {
+        return {
+          success: false,
+          message: "No license found to refresh",
+        };
+      }
+
+      const { data } = await licenseManager.validateLicenseKey({
+        key: instanceLicense.licenseKey,
+      });
+
+      if (!data) {
+        throw new AppError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to validate license",
+        });
+      }
+
+      await prisma.instanceLicense.update({
+        where: {
+          licenseKey: instanceLicense.licenseKey,
+        },
+        data: {
+          licenseeName: data.licenseeName,
+          licenseeEmail: data.licenseeEmail,
+          issuedAt: data.issuedAt,
+          expiresAt: data.expiresAt,
+          seats: data.seats,
+          type: data.type,
+          whiteLabelAddon: data.whiteLabelAddon,
+        },
+      });
+
+      updateTag(INSTANCE_LICENSE_TAG);
+
+      return {
+        success: true,
+        message: "License refreshed successfully",
+      };
+    } catch (error) {
+      logger.error({ error }, "Failed to refresh license");
+      throw new AppError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Failed to validate license",
+      });
+    }
+  });
+
+export const validateLicenseKeyAction = adminActionClient
+  .metadata({
+    actionName: "validate_license_key",
+  })
+  .inputSchema(validateLicenseKeyInputSchema)
+  .action(async ({ parsedInput }) => {
+    const { data } = await licenseManager.validateLicenseKey(parsedInput);
+    if (!data) {
+      throw new AppError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Failed to validate license",
+      });
+    }
+
+    await setInstanceLicense(data);
+
+    updateTag(INSTANCE_LICENSE_TAG);
+
+    return {
+      valid: true,
+    };
+  });

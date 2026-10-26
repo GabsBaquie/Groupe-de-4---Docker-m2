@@ -1,0 +1,264 @@
+import { cn } from "@rallly/ui";
+import { Avatar, AvatarFallback } from "@rallly/ui/avatar";
+import type { TFunction } from "i18next";
+import {
+  ClockIcon,
+  MapPinIcon,
+  Maximize2Icon,
+  PlusIcon,
+  UserIcon,
+} from "lucide-react";
+import * as React from "react";
+import GoogleMeetIcon from "@/assets/google-meet.svg";
+import MicrosoftTeamsIcon from "@/assets/microsoft-teams.svg";
+import ZoomIcon from "@/assets/zoom.svg";
+import { BrowserChrome } from "./browser-chrome";
+import type { DemoDay } from "./demo-data";
+import { formatDemoParts, getInitials } from "./demo-data";
+import { DemoWindow } from "./demo-frame";
+import type { DemoConferencingProvider, DemoPreset } from "./demo-presets";
+import { VoteCount } from "./vote-count";
+import { VoteIcon } from "./vote-icon";
+
+// Brand names, so they stay untranslated, matching the app.
+const conferencingProviders: Record<
+  DemoConferencingProvider,
+  { label: string; Icon: React.ComponentType<React.SVGProps<SVGSVGElement>> }
+> = {
+  meet: { label: "Google Meet", Icon: GoogleMeetIcon },
+  teams: { label: "Microsoft Teams", Icon: MicrosoftTeamsIcon },
+  zoom: { label: "Zoom", Icon: ZoomIcon },
+};
+
+export const DesktopDemo = ({
+  locale,
+  days,
+  scores,
+  preset,
+  t,
+}: {
+  locale: string;
+  days: DemoDay[];
+  scores: number[];
+  preset: DemoPreset;
+  t: TFunction<"home">;
+}) => {
+  const format = formatDemoParts(locale);
+  const topScore = Math.max(...scores);
+
+  const monthGroups: { label: string; span: number }[] = [];
+  for (const day of days) {
+    const label = `${format.month.format(day.date).toUpperCase()} ${format.year.format(day.date)}`;
+    const last = monthGroups.at(-1);
+    if (last?.label === label) {
+      last.span += day.options.length;
+    } else {
+      monthGroups.push({ label, span: day.options.length });
+    }
+  }
+
+  return (
+    <DemoWindow>
+      <BrowserChrome url="app.rallly.co/invite/k3Xb9qLm" />
+      <div className="bg-gray-100 p-4 sm:p-6">
+        {/* Pinned to the grid width (235px + 8 × 84px) so a long description
+            wraps instead of stretching the card past the table. */}
+        <div className="mx-auto w-[907px] space-y-3 text-left">
+          <div className="overflow-hidden rounded-xl border border-gray-200/60 bg-white">
+            <div className="h-1.5 bg-linear-to-r from-indigo-500 to-violet-500" />
+            <div className="space-y-3 p-4 sm:p-5">
+              <div>
+                <h3 className="font-semibold text-gray-900 text-lg tracking-tight">
+                  {preset.title}
+                </h3>
+                <p className="mt-1 text-gray-600 text-sm">
+                  {preset.description}
+                </p>
+              </div>
+              <div className="space-y-1.5 text-gray-600 text-sm">
+                <div className="flex items-center gap-2">
+                  <UserIcon className="size-4 text-gray-400" />
+                  {preset.organizer}
+                </div>
+                {preset.location ? (
+                  <div className="flex items-center gap-2">
+                    <MapPinIcon className="size-4 text-gray-400" />
+                    {preset.location}
+                  </div>
+                ) : null}
+                {preset.conferencing ? (
+                  <div className="flex items-center gap-2">
+                    <ConferencingProvider provider={preset.conferencing} />
+                  </div>
+                ) : null}
+              </div>
+              <div>
+                <div className="font-medium text-gray-900 text-sm">
+                  {t("heroDemoResponseOptions", {
+                    ns: "home",
+                    defaultValue: "Response options",
+                  })}
+                </div>
+                <div className="mt-1.5 flex items-center gap-4 text-gray-600 text-sm">
+                  <span className="flex items-center gap-1.5">
+                    <VoteIcon vote="yes" />
+                    {t("heroDemoYes", {
+                      ns: "home",
+                      defaultValue: "Yes",
+                    })}
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <VoteIcon vote="ifNeedBe" />
+                    {t("heroDemoIfNeedBe", {
+                      ns: "home",
+                      defaultValue: "If need be",
+                    })}
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <VoteIcon vote="no" />
+                    {t("heroDemoNo", {
+                      ns: "home",
+                      defaultValue: "No",
+                    })}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="overflow-hidden rounded-xl border border-gray-200/60 bg-white">
+            <div className="flex items-center justify-between px-4 py-3">
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-gray-900 text-sm">
+                  {t("heroDemoParticipants", {
+                    ns: "home",
+                    defaultValue: "Participants",
+                  })}
+                </span>
+                <span className="rounded-md border px-1.5 py-0.5 text-gray-500 text-xs">
+                  {preset.participants.length}
+                </span>
+                <span className="flex size-6 items-center justify-center rounded-md border text-gray-500">
+                  <PlusIcon className="size-3.5" />
+                </span>
+              </div>
+              <div className="flex items-center gap-3 text-gray-500 text-sm">
+                <Maximize2Icon className="size-4" />
+              </div>
+            </div>
+            {/* 235px matches the name column in the app's desktop poll, so the
+                demo reads as a replica of the real thing. Preset names are kept
+                short enough to fit it; the name span needs flex-1 to claim the
+                width. */}
+            <div className="grid grid-cols-[235px_repeat(8,84px)] border-gray-100 border-t text-center">
+              <div />
+              {monthGroups.map((group) => (
+                <div
+                  key={group.label}
+                  style={{ gridColumn: `span ${group.span}` }}
+                  className="border-gray-100 border-l py-2 text-left"
+                >
+                  <span className="pl-3 font-medium text-gray-700 text-xs tracking-wide">
+                    {group.label}
+                  </span>
+                </div>
+              ))}
+              <div />
+              {days.flatMap((day) =>
+                day.options.map((option, slotIndex) => (
+                  <div
+                    key={option.start.toISOString()}
+                    className={cn(
+                      "border-gray-100 border-t pt-2.5 text-gray-500 text-xs",
+                      slotIndex === 0 && "border-l",
+                    )}
+                  >
+                    {slotIndex === 0 && (
+                      <>
+                        {format.weekday.format(day.date)}
+                        <div className="font-semibold text-base text-gray-900">
+                          {format.dayOfMonth.format(day.date)}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )),
+              )}
+              <div />
+              {days.flatMap((day) =>
+                day.options.map((option, slotIndex) => {
+                  const optionIndex =
+                    days
+                      .slice(0, days.indexOf(day))
+                      .reduce((sum, d) => sum + d.options.length, 0) +
+                    slotIndex;
+                  const score = scores[optionIndex];
+                  return (
+                    <div
+                      key={option.start.toISOString()}
+                      className={cn(
+                        "space-y-1 py-2.5 text-xs",
+                        slotIndex === 0
+                          ? "border-gray-100 border-l"
+                          : "border-gray-50 border-l",
+                      )}
+                    >
+                      <div className="text-gray-700">
+                        {format.time.format(option.start)}
+                      </div>
+                      <div className="flex items-center justify-center gap-1 text-gray-500">
+                        <ClockIcon className="size-3" />
+                        1h
+                      </div>
+                      <VoteCount count={score} highlight={score === topScore} />
+                    </div>
+                  );
+                }),
+              )}
+              {preset.participants.map((participant) => (
+                <React.Fragment key={participant.name}>
+                  <div className="flex items-center gap-2.5 border-gray-100 border-t px-3 py-3 text-left">
+                    <Avatar size="sm" className="size-7" bordered={false}>
+                      <AvatarFallback seed={participant.name}>
+                        {getInitials(participant.name)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span className="min-w-0 flex-1 truncate text-gray-800 text-sm">
+                      {participant.name}
+                    </span>
+                  </div>
+                  {participant.votes.map((vote, index) => (
+                    <div
+                      key={`${participant.name}-${index}`}
+                      className={cn(
+                        "flex items-center justify-center border-gray-100 border-t",
+                        index % 2 === 0
+                          ? "border-l"
+                          : "border-gray-50 border-l",
+                      )}
+                    >
+                      <VoteIcon vote={vote} />
+                    </div>
+                  ))}
+                </React.Fragment>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </DemoWindow>
+  );
+};
+
+function ConferencingProvider({
+  provider,
+}: {
+  provider: DemoConferencingProvider;
+}) {
+  const { label, Icon } = conferencingProviders[provider];
+  return (
+    <>
+      <Icon width={16} height={16} aria-hidden="true" />
+      {label}
+    </>
+  );
+}

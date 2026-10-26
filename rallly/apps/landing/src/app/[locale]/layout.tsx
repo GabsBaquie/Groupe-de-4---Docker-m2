@@ -1,0 +1,64 @@
+import "./globals.css";
+
+import languages from "@rallly/languages";
+import { PostHogInit } from "@rallly/posthog/client";
+import { cn } from "@rallly/ui";
+import { Analytics } from "@vercel/analytics/react";
+import { domAnimation, LazyMotion } from "motion/react";
+import type { Metadata, Viewport } from "next";
+import { cacheLife } from "next/cache";
+import { display } from "@/fonts/display";
+import { sans } from "@/fonts/sans";
+import { I18nProvider } from "@/i18n/client/i18n-provider";
+import { getTranslation } from "@/i18n/server";
+
+export const ensureStatic = "navigation";
+
+export async function generateStaticParams() {
+  return Object.keys(languages).map((locale) => ({ locale }));
+}
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+};
+
+export default async function Root(props: {
+  children: React.ReactNode;
+  params: Promise<{ locale: string }>;
+}) {
+  "use cache";
+  cacheLife("max");
+  const { children, params } = props;
+  const { locale } = await params;
+
+  const { i18n } = await getTranslation(locale);
+  const translations = i18n.store.data;
+
+  return (
+    <html
+      lang={i18n.resolvedLanguage}
+      className={cn(sans.className, display.variable)}
+    >
+      <body>
+        <LazyMotion features={domAnimation}>
+          <I18nProvider locale={i18n.resolvedLanguage} resources={translations}>
+            <PostHogInit>{children}</PostHogInit>
+            <Analytics />
+          </I18nProvider>
+        </LazyMotion>
+      </body>
+    </html>
+  );
+}
+
+export const metadata: Metadata = {
+  title: { template: "%s | Rallly", default: "Rallly" },
+  metadataBase: process.env.NEXT_PUBLIC_BASE_URL
+    ? new URL(process.env.NEXT_PUBLIC_BASE_URL)
+    : undefined,
+  openGraph: {
+    type: "website",
+    siteName: "Rallly",
+  },
+};

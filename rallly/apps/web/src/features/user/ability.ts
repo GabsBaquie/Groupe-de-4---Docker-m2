@@ -1,0 +1,73 @@
+import type { PureAbility } from "@casl/ability";
+import { AbilityBuilder } from "@casl/ability";
+import type { PrismaQuery, Subjects } from "@casl/prisma";
+import { createPrismaAbility } from "@casl/prisma";
+import type { UserRole } from "@/features/user/schema";
+
+type Action = "update" | "delete";
+type Subject = Subjects<{
+  User: {
+    id: string;
+    role: UserRole;
+  };
+}>;
+
+type UserAbilityContext = {
+  role: UserRole;
+  id: string;
+};
+export type UserAbility = PureAbility<[Action, Subject], PrismaQuery>;
+
+export function defineAbilityFor(user?: UserAbilityContext) {
+  const builder = new AbilityBuilder<UserAbility>(createPrismaAbility);
+
+  if (!user) {
+    return builder.build();
+  }
+
+  switch (user.role) {
+    case "admin":
+      defineAbilityForAdmin(builder, user);
+      break;
+    case "user":
+      defineAbilityForUser(builder, user);
+      break;
+    default:
+      break;
+  }
+
+  return builder.build();
+}
+
+function defineAbilityForUser(
+  builder: AbilityBuilder<UserAbility>,
+  user: UserAbilityContext,
+) {
+  const { can } = builder;
+
+  // Can update their own email and name
+  can("update", "User", ["email", "name"], { id: user.id });
+  // Can delete their own account. An active subscription no longer blocks
+  // deletion — scheduling a deletion stops the renewal instead.
+  can("delete", "User", { id: user.id });
+}
+
+function defineAbilityForAdmin(
+  builder: AbilityBuilder<UserAbility>,
+  user: UserAbilityContext,
+) {
+  defineAbilityForUser(builder, user);
+  const { can, cannot } = builder;
+  // Can update any user's role
+  can("update", "User", ["role"]);
+  // Cannot update their own role
+  cannot("update", "User", ["role"], { id: user.id });
+  // Can ban/unban any user
+  can("update", "User", ["banned"]);
+  // Cannot ban themselves
+  cannot("update", "User", ["banned"], { id: user.id });
+  // Can delete any user
+  can("delete", "User");
+  // Cannot delete their own account
+  cannot("delete", "User", { id: user.id });
+}

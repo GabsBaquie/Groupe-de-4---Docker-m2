@@ -1,0 +1,30 @@
+{
+  "name": "@rallly/posthog",
+  "version": "0.0.0",
+  "private": true,
+  "exports": {
+    "./server": "./src/server.ts",
+    "./client": "./src/client.ts"
+  },
+  "scripts": {
+    "backfill-space-group-properties": "dotenv -e .env -- pnpx tsx ./src/scripts/backfill-space-group-properties.ts",
+    "backfill-space-type": "dotenv -e .env -- pnpx tsx ./src/scripts/backfill-space-type.ts",
+    "purge-guest-profiles": "dotenv -e .env -- pnpx tsx ./src/scripts/purge-guest-profiles.ts",
+    "test:unit": "vitest run",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "js-cookie": "^3.0.8",
+    "posthog-js": "^1.434.11",
+    "posthog-node": "^5.46.1",
+    "react": "19.2.6"
+  },
+  "devDependencies": {
+    "@rallly/database": "workspace:*",
+    "@rallly/tsconfig": "workspace:*",
+    "@types/js-cookie": "^3.0.1",
+    "@types/node": "^24.1.0",
+    "@types/react": "19.2.13",
+    "vitest": "^4.1.11"
+  }
+}

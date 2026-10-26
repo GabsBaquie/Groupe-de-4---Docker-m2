@@ -1,0 +1,19 @@
+{
+  "extends": "@rallly/tsconfig/next.json",
+  "compilerOptions": {
+    "paths": {
+      "@/*": ["./src/*"],
+      "~/*": ["./public/*"]
+    },
+    "checkJs": false,
+    "target": "ES2017"
+  },
+  "include": [
+    "next-env.d.ts",
+    "declarations/**/*.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts"
+  ],
+  "exclude": ["node_modules", ".next"]
+}

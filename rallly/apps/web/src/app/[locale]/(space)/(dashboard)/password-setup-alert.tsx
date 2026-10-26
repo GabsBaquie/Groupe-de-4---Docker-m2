@@ -1,0 +1,81 @@
+"use client";
+import { buttonVariants } from "@rallly/ui";
+import {
+  Alert,
+  AlertAction,
+  AlertDescription,
+  AlertTitle,
+} from "@rallly/ui/alert";
+import { Button } from "@rallly/ui/button";
+import { KeyRoundIcon } from "lucide-react";
+import { AnimatePresence } from "motion/react";
+import * as m from "motion/react-m";
+import dynamic from "next/dynamic";
+import { useLocalStorage } from "react-use";
+import { Link } from "@/components/link";
+import { Trans } from "@/i18n/client";
+
+export const PasswordSetupAlert = dynamic(
+  () => Promise.resolve(PasswordSetupAlertInner),
+  { ssr: false },
+);
+
+function PasswordSetupAlertInner() {
+  const [dismissed, setDismissed] = useLocalStorage<string>(
+    "password_setup_dismissed",
+  );
+
+  return (
+    <AnimatePresence initial={true}>
+      {!dismissed ? (
+        <m.div
+          initial={{ height: 0, opacity: 0 }}
+          animate={{ height: "auto", opacity: 1 }}
+          exit={{ height: 0, opacity: 0 }}
+          style={{ overflow: "hidden" }}
+        >
+          <Alert>
+            <KeyRoundIcon />
+            <AlertTitle>
+              <Trans
+                i18nKey="setupPasswordAlertTitle"
+                defaults="Login quicker with a password"
+              />
+            </AlertTitle>
+            <AlertDescription>
+              <Trans
+                i18nKey="setupPasswordAlertDesc"
+                defaults="Set up a password to make logging in faster and more convenient."
+              />
+            </AlertDescription>
+            <AlertAction>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setDismissed("1");
+                  }}
+                >
+                  <Trans
+                    i18nKey="dismissPasswordSetup"
+                    defaults="Don't show again"
+                  />
+                </Button>
+                <Link
+                  href="/settings/security"
+                  className={buttonVariants({ variant: "primary", size: "sm" })}
+                >
+                  <Trans
+                    i18nKey="setupPasswordButton"
+                    defaults="Set up password"
+                  />
+                </Link>
+              </div>
+            </AlertAction>
+          </Alert>
+        </m.div>
+      ) : null}
+    </AnimatePresence>
+  );
+}

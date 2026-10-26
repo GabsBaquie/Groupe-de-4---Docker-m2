@@ -1,0 +1,33 @@
+"use client";
+
+import { useSearchParams } from "next/navigation";
+import { Link } from "@/components/link";
+import { validateRedirectUrl } from "@/lib/utils/redirect";
+
+export function LinkWithRedirectTo({
+  href,
+  className,
+  children,
+}: {
+  href: string;
+  className?: string;
+  children?: React.ReactNode;
+}) {
+  const searchParams = useSearchParams();
+  const validatedRedirectTo = validateRedirectUrl(
+    searchParams.get("redirectTo"),
+  );
+
+  return (
+    <Link
+      className={className}
+      href={
+        validatedRedirectTo
+          ? `${href}?redirectTo=${encodeURIComponent(validatedRedirectTo)}`
+          : href
+      }
+    >
+      {children}
+    </Link>
+  );
+}

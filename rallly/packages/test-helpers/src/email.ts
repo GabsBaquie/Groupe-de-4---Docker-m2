@@ -1,0 +1,42 @@
+import { load } from "cheerio";
+
+import { captureEmailHTML } from "./mailpit";
+
+/**
+ * Get the 6-digit code from the email
+ */
+export async function getCode(email: string): Promise<string> {
+  const html = await captureEmailHTML(email);
+  const $ = load(html);
+  return $("#code").text().trim();
+}
+
+/**
+ * Extract the space invite link from the email HTML
+ */
+export async function getSpaceInviteLink(email: string): Promise<string> {
+  const html = await captureEmailHTML(email);
+  const $ = load(html);
+
+  const inviteLink = $("#inviteUrl").attr("href");
+  if (!inviteLink) {
+    throw new Error("Invite link not found in email");
+  }
+
+  return inviteLink;
+}
+
+/**
+ * Extract the password reset link from the email HTML
+ */
+export async function getPasswordResetLink(email: string): Promise<string> {
+  const html = await captureEmailHTML(email);
+  const $ = load(html);
+
+  const resetLink = $("#resetLink").attr("href");
+  if (!resetLink) {
+    throw new Error("Reset link not found in email");
+  }
+
+  return resetLink;
+}

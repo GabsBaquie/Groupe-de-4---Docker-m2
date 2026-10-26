@@ -1,0 +1,91 @@
+import { SidebarInset, SidebarTrigger } from "@rallly/ui/sidebar";
+import { GaugeIcon } from "lucide-react";
+import type { Metadata } from "next";
+import { Suspense } from "react";
+import { RouterLoadingIndicator } from "@/components/router-loading-indicator";
+import { SecurityUpdateBanner } from "@/features/instance-settings/components/security-update-banner";
+import { LicenseLimitWarning } from "@/features/licensing/components/license-limit-warning";
+import { CommandMenu } from "@/features/navigation/components/command-menu";
+import { UserProvider } from "@/features/user/client";
+import { loadAdmin } from "@/features/user/loaders";
+import { Trans } from "@/i18n/client";
+import { getTranslation } from "@/i18n/server";
+import { getLocale } from "@/i18n/server/get-locale";
+import { DateTimeProvider } from "@/lib/datetime/client";
+import { ControlPanelSidebarProvider } from "./control-panel-sidebar-provider";
+import { ControlPanelSidebar } from "./sidebar";
+
+// The admin gate awaits below the Suspense boundary in the default export
+// so the document shell can flush before the session store responds.
+async function AdminGate({ children }: { children: React.ReactNode }) {
+  const [locale, user] = await Promise.all([getLocale(), loadAdmin()]);
+
+  return (
+    <UserProvider user={user}>
+      <DateTimeProvider
+        locale={locale}
+        timeZone={user.timeZone}
+        timeFormat={user.timeFormat}
+        weekStart={user.weekStart}
+      >
+        <ControlPanelSidebarProvider>
+          <CommandMenu />
+          <ControlPanelSidebar />
+          <SidebarInset id="main-content" tabIndex={-1}>
+            <LicenseLimitWarning />
+            <div className="flex flex-1 flex-col">
+              <header className="sticky top-0 z-10 border-b bg-sidebar/90 p-3 backdrop-blur-xs md:hidden">
+                <div className="flex items-center gap-4">
+                  <SidebarTrigger />
+                  <div className="flex items-center gap-2">
+                    <GaugeIcon className="size-4 shrink-0 text-muted-foreground" />
+                    <span className="font-medium text-sm">
+                      <Trans i18nKey="controlPanel" defaults="Control Panel" />
+                    </span>
+                  </div>
+                </div>
+              </header>
+              {/* Own boundary: the update check may take up to 3s on a cold
+                  cache and must not hold back the page */}
+              <Suspense fallback={null}>
+                <SecurityUpdateBanner />
+              </Suspense>
+              <div className="flex-1 p-4 lg:py-12">{children}</div>
+            </div>
+          </SidebarInset>
+        </ControlPanelSidebarProvider>
+      </DateTimeProvider>
+    </UserProvider>
+  );
+}
+
+export default function AdminLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <Suspense fallback={<RouterLoadingIndicator />}>
+      <AdminGate>{children}</AdminGate>
+    </Suspense>
+  );
+}
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale } = await params;
+  const { t } = await getTranslation(locale);
+  return {
+    title: {
+      template: `%s | ${t("controlPanel", {
+        defaultValue: "Control Panel",
+      })}`,
+      default: t("controlPanel", {
+        defaultValue: "Control Panel",
+      }),
+    },
+  };
+}

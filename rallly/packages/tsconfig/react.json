@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "display": "Next.js",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "noPropertyAccessFromIndexSignature": false,
+    "exactOptionalPropertyTypes": false,
+    "noUncheckedIndexedAccess": false,
+    "noImplicitReturns": false,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true,
+    "strictNullChecks": true,
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "jsx": "react-jsx"
+  }
+}

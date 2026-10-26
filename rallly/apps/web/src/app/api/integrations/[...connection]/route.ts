@@ -1,0 +1,216 @@
+import { env } from "@/env";
+import {
+  createCalendarConnection,
+  syncCalendars,
+} from "@/features/calendars/mutations";
+import {
+  enabledConferencingProviders,
+  MICROSOFT_TEAMS_SCOPES,
+  WEBEX_SCOPES,
+} from "@/features/conferencing/constants";
+import { createConferencingConnection } from "@/features/conferencing/mutations";
+import { checkTeamsCanHostMeetings } from "@/features/conferencing/service";
+import { getMicrosoftTeamsAuthority } from "@/features/conferencing/utils";
+import { saveOAuthCredentials } from "@/features/credentials/mutations";
+import { getSession } from "@/lib/auth";
+import { OAuthConnectionRefusedError } from "@/lib/oauth/errors";
+import { GoogleOAuthClient } from "@/lib/oauth/providers/google";
+import { MicrosoftOAuthClient } from "@/lib/oauth/providers/microsoft";
+import { WebexOAuthClient } from "@/lib/oauth/providers/webex";
+import { ZoomOAuthClient } from "@/lib/oauth/providers/zoom";
+import { OAuthIntegration } from "@/lib/oauth/server";
+import type { OAuthClient } from "@/lib/oauth/types";
+
+type Integration =
+  | "google-calendar"
+  | "outlook-calendar"
+  | "google-meet"
+  | "microsoft-teams"
+  | "webex"
+  | "zoom";
+
+async function requireSessionUserId() {
+  const session = await getSession();
+  if (!session?.user) {
+    throw new Error("User not found");
+  }
+  return session.user.id;
+}
+
+function conferencingOnConnect({
+  integrationId,
+  displayName,
+}: {
+  integrationId: Integration;
+  displayName: string;
+}): NonNullable<OAuthClient["onConnect"]> {
+  return async ({ provider, tokens, providerAccountId, userInfo }) => {
+    const userId = await requireSessionUserId();
+
+    const credential = await saveOAuthCredentials({
+      userId,
+      provider,
+      providerAccountId,
+      tokens,
+    });
+
+    await createConferencingConnection({
+      userId,
+      provider,
+      integrationId,
+      credentialId: credential.id,
+      providerAccountId,
+      userInfo,
+      displayName,
+    });
+  };
+}
+
+const { handler } = OAuthIntegration<Integration>({
+  basePath: "/api/integrations",
+  getIntegration: async ({ integrationId, callbackUrl }) => {
+    switch (integrationId) {
+      case "google-calendar": {
+        if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) {
+          return null;
+        }
+        return new GoogleOAuthClient({
+          clientId: env.GOOGLE_CLIENT_ID,
+          clientSecret: env.GOOGLE_CLIENT_SECRET,
+          callbackUrl,
+          scopes: [
+            "https://www.googleapis.com/auth/calendar.readonly",
+            "https://www.googleapis.com/auth/calendar.events",
+            "https://www.googleapis.com/auth/userinfo.email",
+            "https://www.googleapis.com/auth/userinfo.profile",
+          ],
+          onConnect: async ({
+            provider,
+            tokens,
+            providerAccountId,
+            userInfo,
+          }) => {
+            const userId = await requireSessionUserId();
+
+            // save credentials to database
+            const credential = await saveOAuthCredentials({
+              userId,
+              provider,
+              providerAccountId,
+              tokens,
+            });
+
+            // create calendar connection
+            const connection = await createCalendarConnection({
+              userId,
+              provider,
+              integrationId,
+              credentialId: credential.id,
+              providerAccountId,
+              userInfo,
+              displayName: "Google Calendar",
+            });
+
+            await syncCalendars({ userId, connectionId: connection.id });
+          },
+        });
+      }
+      case "google-meet": {
+        if (
+          !enabledConferencingProviders.includes("meet") ||
+          !env.GOOGLE_CLIENT_ID ||
+          !env.GOOGLE_CLIENT_SECRET
+        ) {
+          return null;
+        }
+        return new GoogleOAuthClient({
+          clientId: env.GOOGLE_CLIENT_ID,
+          clientSecret: env.GOOGLE_CLIENT_SECRET,
+          callbackUrl,
+          scopes: [
+            "https://www.googleapis.com/auth/meetings.space.created",
+            "https://www.googleapis.com/auth/userinfo.email",
+            "https://www.googleapis.com/auth/userinfo.profile",
+          ],
+          onConnect: conferencingOnConnect({
+            integrationId,
+            displayName: "Google Meet",
+          }),
+        });
+      }
+      case "zoom": {
+        if (
+          !enabledConferencingProviders.includes("zoom") ||
+          !env.ZOOM_CLIENT_ID ||
+          !env.ZOOM_CLIENT_SECRET
+        ) {
+          return null;
+        }
+        return new ZoomOAuthClient({
+          clientId: env.ZOOM_CLIENT_ID,
+          clientSecret: env.ZOOM_CLIENT_SECRET,
+          callbackUrl,
+          scopes: ["meeting:write:meeting", "user:read:user"],
+          onConnect: conferencingOnConnect({
+            integrationId,
+            displayName: "Zoom",
+          }),
+        });
+      }
+      case "webex": {
+        if (
+          !enabledConferencingProviders.includes("webex") ||
+          !env.WEBEX_CLIENT_ID ||
+          !env.WEBEX_CLIENT_SECRET
+        ) {
+          return null;
+        }
+        return new WebexOAuthClient({
+          clientId: env.WEBEX_CLIENT_ID,
+          clientSecret: env.WEBEX_CLIENT_SECRET,
+          callbackUrl,
+          scopes: WEBEX_SCOPES,
+          onConnect: conferencingOnConnect({
+            integrationId,
+            displayName: "Webex",
+          }),
+        });
+      }
+      case "microsoft-teams": {
+        if (
+          !enabledConferencingProviders.includes("teams") ||
+          !env.MICROSOFT_CLIENT_ID ||
+          !env.MICROSOFT_CLIENT_SECRET
+        ) {
+          return null;
+        }
+        return new MicrosoftOAuthClient({
+          tenant: getMicrosoftTeamsAuthority(env.MICROSOFT_TENANT_ID),
+          clientId: env.MICROSOFT_CLIENT_ID,
+          clientSecret: env.MICROSOFT_CLIENT_SECRET,
+          callbackUrl,
+          scopes: MICROSOFT_TEAMS_SCOPES,
+          onConnect: async (params) => {
+            // An account without a Teams license signs in fine and only
+            // fails when a poll is finalized, so it is refused here instead.
+            const check = await checkTeamsCanHostMeetings({
+              accessToken: params.tokens.accessToken,
+            });
+            if (!check.ok && check.reason === "refused") {
+              throw new OAuthConnectionRefusedError("cannot_host_meetings");
+            }
+            await conferencingOnConnect({
+              integrationId,
+              displayName: "Microsoft Teams",
+            })(params);
+          },
+        });
+      }
+      default:
+        return null;
+    }
+  },
+});
+
+export const GET = handler;
+export const POST = handler;
