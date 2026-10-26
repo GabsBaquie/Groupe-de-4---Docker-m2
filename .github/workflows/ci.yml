@@ -1,0 +1,206 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  # A push to main must always finish: only superseded PR runs are cancelled.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  quality:
+    name: Quality
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: rallly
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: rallly/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: pnpm
+          cache-dependency-path: rallly/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm db:generate
+      - name: Type check
+        run: pnpm type-check
+      - name: Lint (Biome)
+        run: pnpm turbo check
+      - name: Feature folder structure
+        run: pnpm check:structure
+      - name: Locale files
+        run: pnpm check:locales
+
+  unit-tests:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: rallly
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: rallly/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: pnpm
+          cache-dependency-path: rallly/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm db:generate
+      - name: Run unit tests
+        run: pnpm test:unit
+
+  compose-config:
+    name: Compose config
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Built from .env.example so a variable used by the compose file but
+      # missing from .env.example is caught below.
+      - name: Build dummy .env from .env.example
+        run: sed -E 's/^([A-Z_]+)=$/\1=ci-dummy-value-0123456789abcdef0123/' .env.example > .env
+      - name: Validate docker-compose.yml
+        run: |
+          docker compose config -q 2> compose.err || { cat compose.err; exit 1; }
+          cat compose.err
+          if grep -q "is not set" compose.err; then
+            echo "::error::docker-compose.yml uses variables missing from .env.example"
+            exit 1
+          fi
+
+  docker-smoke:
+    name: Docker smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build Rallly image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./rallly
+          file: ./rallly/apps/web/Dockerfile
+          build-args: SELF_HOSTED=true
+          tags: rallly-ci:latest
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Write dummy .env
+        run: |
+          cat > .env <<'EOF2'
+          SECRET_PASSWORD=0123456789abcdef0123456789abcdef
+          POSTGRES_PASSWORD=ci-postgres
+          SUPPORT_EMAIL=support@example.com
+          AUTHENTIK_SECRET_KEY=ci-authentik-secret-key
+          AUTHENTIK_DB_PASSWORD=ci-authentik-db
+          REQUIRE_OIDC_TO_VOTE=true
+          EOF2
+      - name: Start Rallly and its database
+        run: docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d --wait --wait-timeout 120 rallly
+      # /api/status answers 200 even when the database is unreachable, so
+      # assert the database field explicitly.
+      - name: Check status endpoint and login page
+        run: |
+          status=$(curl -fsS --connect-timeout 5 --max-time 15 http://localhost:3000/api/status)
+          echo "$status"
+          echo "$status" | jq -e '.database == "connected"'
+          curl -fsSL --connect-timeout 5 --max-time 15 -o /dev/null http://localhost:3000/login
+      - name: Show logs on failure
+        if: failure()
+        run: docker compose -f docker-compose.yml -f docker-compose.ci.yml logs
+
+  e2e-oidc:
+    name: E2E OIDC (Authentik)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build Rallly image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./rallly
+          file: ./rallly/apps/web/Dockerfile
+          build-args: SELF_HOSTED=true
+          tags: rallly-ci:latest
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Resolve authentik.localhost to the runner
+        run: echo "127.0.0.1 authentik.localhost" | sudo tee -a /etc/hosts
+      - name: Write dummy .env
+        run: |
+          cat > .env <<'EOF2'
+          SECRET_PASSWORD=0123456789abcdef0123456789abcdef
+          POSTGRES_PASSWORD=ci-postgres
+          SUPPORT_EMAIL=support@example.com
+          AUTHENTIK_SECRET_KEY=ci-authentik-secret-key-0123456789abcdef
+          AUTHENTIK_DB_PASSWORD=ci-authentik-db
+          OIDC_DISCOVERY_URL=http://authentik.localhost:9000/application/o/rallly/.well-known/openid-configuration
+          OIDC_CLIENT_ID=rallly
+          OIDC_CLIENT_SECRET=ci-oidc-secret-0123456789abcdef0123456789abcdef
+          REQUIRE_OIDC_TO_VOTE=true
+          EOF2
+      - name: Start Rallly and Authentik
+        run: docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d --wait --wait-timeout 180 rallly authentik-server authentik-worker
+      # Authentik applies the blueprints after it is healthy, so wait for the
+      # provider to exist rather than sleeping a fixed time.
+      - name: Wait for the blueprint to be applied
+        run: |
+          for i in $(seq 1 60); do
+            curl -fs -o /dev/null http://authentik.localhost:9000/application/o/rallly/.well-known/openid-configuration && exit 0
+            sleep 5
+          done
+          echo "::error::Authentik did not expose the rallly OIDC discovery in 5 minutes"
+          exit 1
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: rallly/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: pnpm
+          cache-dependency-path: rallly/pnpm-lock.yaml
+      - name: Install dependencies
+        working-directory: rallly
+        run: pnpm install --frozen-lockfile
+      - name: Install Playwright browser
+        working-directory: rallly
+        run: pnpm --filter @rallly/web exec playwright install --with-deps chromium
+      - name: Run OIDC e2e tests
+        working-directory: rallly
+        env:
+          CI: "true"
+        run: pnpm --filter @rallly/web exec playwright test --config playwright.oidc.config.ts
+      # Bob voted once per voting page. Every stored response must carry the
+      # identity Authentik asserted, linked to his user: nothing a guest typed
+      # and no hand-typed name may reach the database.
+      - name: Check the stored identity
+        run: |
+          rows=$(docker compose -f docker-compose.yml -f docker-compose.ci.yml exec -T db psql -U postgres rallly -tA -c \
+            "select name || '|' || email || '|' || (user_id is not null) from participants")
+          echo "$rows"
+          test "$(echo "$rows" | wc -l | tr -d ' ')" = "2"
+          test "$(echo "$rows" | sort -u)" = "Bob Voter|bob@example.com|true"
+      - name: Upload Playwright traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: oidc-e2e-traces
+          path: rallly/apps/web/test-results/
+          if-no-files-found: ignore
+      - name: Show logs on failure
+        if: failure()
+        run: docker compose -f docker-compose.yml -f docker-compose.ci.yml logs --tail 200

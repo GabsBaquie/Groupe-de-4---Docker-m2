@@ -17,6 +17,16 @@ services:
       SMTP_HOST: mailpit
       SMTP_PORT: 1025
       SMTP_SECURE: "false"
+      # Connexion OIDC via Authentik
+      OIDC_NAME: Authentik
+      OIDC_DISCOVERY_URL: ${OIDC_DISCOVERY_URL}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET}
+      # true : seuls les utilisateurs connectés via OIDC peuvent voter
+      REQUIRE_OIDC_TO_VOTE: ${REQUIRE_OIDC_TO_VOTE:-true}
+    # authentik.localhost doit être joignable depuis le conteneur ET le navigateur (*.localhost se résout en loopback)
+    extra_hosts:
+      - "authentik.localhost:host-gateway"
     depends_on:
       db:
         condition: service_healthy
@@ -42,5 +52,54 @@ services:
     ports:
       - "8025:8025" # interface web pour lire les e-mails
 
+  # Fournisseur d'identité (IdP) OIDC
+  authentik-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${AUTHENTIK_DB_PASSWORD}
+      POSTGRES_USER: authentik
+      POSTGRES_DB: authentik
+    volumes:
+      - authentik-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U authentik"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  authentik-server:
+    image: ghcr.io/goauthentik/server:2025.10.1
+    restart: unless-stopped
+    command: server
+    environment: &authentik-env
+      AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY}
+      AUTHENTIK_POSTGRESQL__HOST: authentik-db
+      AUTHENTIK_POSTGRESQL__USER: authentik
+      AUTHENTIK_POSTGRESQL__NAME: authentik
+      AUTHENTIK_POSTGRESQL__PASSWORD: ${AUTHENTIK_DB_PASSWORD}
+      # Lus par le blueprint authentik/blueprints/rallly.yaml (!Env)
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET}
+    volumes:
+      - ./authentik/blueprints:/blueprints/custom:ro
+    ports:
+      - "9000:9000"    # interface web Authentik
+    depends_on:
+      authentik-db:
+        condition: service_healthy
+
+  authentik-worker:
+    image: ghcr.io/goauthentik/server:2025.10.1
+    restart: unless-stopped
+    command: worker
+    environment: *authentik-env
+    volumes:
+      - ./authentik/blueprints:/blueprints/custom:ro
+    depends_on:
+      authentik-db:
+        condition: service_healthy
+
 volumes:
   db-data:
+  authentik-db-data:

@@ -226,6 +226,7 @@ export function VoteForm({
   results,
   response,
   canVote,
+  identityLocked,
   pastOptionIds,
   children,
 }: {
@@ -235,6 +236,8 @@ export function VoteForm({
   results: VotePageView["results"];
   response: VotePageView["response"];
   canVote: boolean;
+  /** The response is recorded under the IdP identity, so it is not editable. */
+  identityLocked: boolean;
   /** Options that have passed, by the viewer's clock. */
   pastOptionIds: Set<string>;
   children: React.ReactNode;
@@ -328,6 +331,7 @@ export function VoteForm({
             <NewParticipantForm
               pollId={pollId}
               requireParticipantEmail={requireParticipantEmail}
+              identityLocked={identityLocked}
               votes={normalizeVotes(optionIds, form.watch("votes"))}
               onSubmit={() => {
                 form.reset({ mode: "view", votes: emptyVotes(results) });
