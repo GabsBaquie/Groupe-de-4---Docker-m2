@@ -45,6 +45,20 @@ jobs en *required status checks*, après un premier run vert.
 Playwright e2e (dont un test du vote refusé sans session OIDC), `check:openapi`,
 publication ghcr.io, déploiement. Phase 2 éventuelle.
 
+## Phase 2 prévue : Authentik dans la CI
+
+Ajout compatible avec le design ci-dessus (nouveau job `e2e-oidc`, séparé pour
+ne pas ralentir les jobs rapides ; démarrage d'Authentik ~1-2 min) :
+
+- Démarrer `authentik-db`, `authentik-server`, `authentik-worker` avec
+  `AUTHENTIK_SECRET_KEY` / `AUTHENTIK_DB_PASSWORD` factices (aucun secret GitHub).
+- **Prérequis** : provisionner Authentik par script (blueprint YAML ou API) :
+  provider OAuth2/OIDC, application de slug `rallly`, utilisateur de test avec
+  nom et email. Aujourd'hui fait à la main.
+- Test Playwright : vote refusé sans session, connexion via Authentik, vote
+  enregistré avec nom/email de l'IdP.
+- À vérifier : résolution de `authentik.localhost` par Chromium sur le runner.
+
 ## Risques
 
 - Build Docker long au premier run (cache ensuite).
