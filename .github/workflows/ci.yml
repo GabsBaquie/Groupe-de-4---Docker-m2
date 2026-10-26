@@ -82,3 +82,43 @@ jobs:
           EOF2
       - name: Validate docker-compose.yml
         run: docker compose config -q
+
+  docker-smoke:
+    name: Docker smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build Rallly image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./rallly
+          file: ./rallly/apps/web/Dockerfile
+          build-args: SELF_HOSTED=true
+          tags: rallly-ci:latest
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Write dummy .env
+        run: |
+          cat > .env <<'EOF2'
+          SECRET_PASSWORD=0123456789abcdef0123456789abcdef
+          POSTGRES_PASSWORD=ci-postgres
+          SUPPORT_EMAIL=support@example.com
+          AUTHENTIK_SECRET_KEY=ci-authentik-secret-key
+          AUTHENTIK_DB_PASSWORD=ci-authentik-db
+          REQUIRE_OIDC_TO_VOTE=true
+          EOF2
+      - name: Start Rallly and its database
+        run: docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d --wait --wait-timeout 120 rallly
+      # /api/status answers 200 even when the database is unreachable, so
+      # assert the database field explicitly.
+      - name: Check status endpoint and login page
+        run: |
+          status=$(curl -fsS --connect-timeout 5 --max-time 15 http://localhost:3000/api/status)
+          echo "$status"
+          echo "$status" | jq -e '.database == "connected"'
+          curl -fsSL --connect-timeout 5 --max-time 15 -o /dev/null http://localhost:3000/login
+      - name: Show logs on failure
+        if: failure()
+        run: docker compose -f docker-compose.yml -f docker-compose.ci.yml logs
