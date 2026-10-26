@@ -9,13 +9,16 @@ le nom et l'email fournis par l'IdP sont enregistrés sur le vote (non modifiabl
 
 Mise en place :
 
-1. Renseigner `.env` (voir `.env.example`), puis `docker compose up -d`.
-2. Ouvrir http://authentik.localhost:9000/if/flow/initial-setup/ pour créer l'admin.
-3. Dans Authentik : créer un *Provider OAuth2/OpenID* + une *Application* de slug
-   `rallly`, type client *Confidential*, redirect URI (strict)
-   `http://localhost:3000/api/auth/callback/oidc`, scopes `openid email profile`.
-4. Copier Client ID / Client Secret dans `.env` (`OIDC_CLIENT_ID`,
-   `OIDC_CLIENT_SECRET`) et relancer : `docker compose up -d --force-recreate rallly`.
+1. Renseigner `.env` (voir `.env.example`) : `OIDC_CLIENT_SECRET` (`openssl rand -hex 32`),
+   `AUTHENTIK_SECRET_KEY` et `AUTHENTIK_DB_PASSWORD`, puis `docker compose up -d`.
+   Au démarrage, Authentik crée tout seul le provider OIDC et l'application `rallly`
+   (blueprint `authentik/blueprints/rallly.yaml`, redirect URI
+   `http://localhost:3000/api/auth/callback/oidc`).
+2. Ouvrir http://authentik.localhost:9000/if/flow/initial-setup/ pour créer l'admin,
+   puis créer tes utilisateurs (*Nom* et *Email* renseignés : ils s'affichent sur le vote).
+
+Si tu avais créé le provider à la main avec le même `client_id`, supprime-le d'abord :
+le blueprint échouerait (erreur loguée par le worker) et ton ancien provider resterait en place.
 
 ## CI
 
