@@ -274,7 +274,8 @@ const notifyBuckets = {
 } as const;
 
 type NotifyBucket =
-  (typeof notifyBuckets)[keyof typeof notifyBuckets] | "no_response";
+  | (typeof notifyBuckets)[keyof typeof notifyBuckets]
+  | "no_response";
 
 export type NotifySelectionSummary = Record<
   `notify_eligible_${NotifyBucket}` | `notify_selected_${NotifyBucket}`,
