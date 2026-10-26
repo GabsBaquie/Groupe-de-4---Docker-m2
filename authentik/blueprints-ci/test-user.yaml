@@ -1,0 +1,11 @@
+version: 1
+metadata:
+  name: Rallly CI test user
+entries:
+  - model: authentik_core.user
+    identifiers:
+      username: alice
+    attrs:
+      name: Alice Test
+      email: alice@example.com
+      password: alice-ci-password

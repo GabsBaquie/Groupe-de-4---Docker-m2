@@ -1,6 +1,12 @@
 # Utilisé uniquement par la CI : démarre l'image déjà construite (avec cache)
-# au lieu de la rebuilder via `build:`.
+# au lieu de la rebuilder via `build:`, et ajoute l'utilisateur de test Authentik.
 services:
   rallly:
     image: rallly-ci:latest
     pull_policy: never
+  authentik-server:
+    volumes:
+      - ./authentik/blueprints-ci:/blueprints/ci:ro
+  authentik-worker:
+    volumes:
+      - ./authentik/blueprints-ci:/blueprints/ci:ro
