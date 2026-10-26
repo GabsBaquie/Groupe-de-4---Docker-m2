@@ -43,6 +43,7 @@ test.describe("voting requires an OIDC session", () => {
   test.describe.configure({ mode: "serial" });
 
   let inviteUrl: string;
+  let votePageUrl: string;
 
   test.beforeAll(async ({ browser }) => {
     // Self-hosted instances do not let guests create polls, so an OIDC user
@@ -64,6 +65,13 @@ test.describe("voting requires an OIDC session", () => {
     await newPollPage.goto();
     const pollPage = await newPollPage.create({ name: "OIDC Vote Poll" });
     inviteUrl = (await pollPage.copyInviteLink()).replace(/\?.*$/, "");
+
+    // A user can answer a poll only once, so the /vote page gets its own.
+    await newPollPage.goto();
+    const secondPoll = await newPollPage.create({
+      name: "OIDC Vote Page Poll",
+    });
+    votePageUrl = `${(await secondPoll.copyInviteLink()).replace(/\?.*$/, "")}/vote`;
     await context.close();
   });
 
@@ -81,26 +89,18 @@ test.describe("voting requires an OIDC session", () => {
     await expect(page.getByTestId("vote-selector")).toHaveCount(0);
   });
 
-  // The /vote page has its own form and no sign-in prompt, so the refusal has
-  // to come from the server: a guest session must not be enough to vote.
-  test("an anonymous visitor is refused on the /vote page too", async ({
+  test("an anonymous visitor sees a sign-in prompt and no vote form on the /vote page", async ({
     page,
   }) => {
-    await page.goto(`${inviteUrl}/vote`);
-
-    await page
-      .getByTestId("vote-selector")
-      .first()
-      .getByRole("radio", { name: "Yes" })
-      .click();
-    await page.getByRole("button", { name: "Continue" }).click();
-    await page.getByPlaceholder("Jessie Smith").fill("Mallory Guest");
-    await page.getByRole("button", { name: "Save availability" }).click();
+    await page.goto(votePageUrl);
 
     await expect(
-      page.getByText("Sign in with your organization account to vote."),
+      page.getByText(
+        "Sign in with your organization account to vote on this poll.",
+      ),
     ).toBeVisible();
-    await expect(page.getByText("Your response has been saved")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Authentik" })).toBeVisible();
+    await expect(page.getByTestId("vote-selector")).toHaveCount(0);
   });
 
   test("an OIDC user votes under their identity provider name and email", async ({
@@ -124,5 +124,32 @@ test.describe("voting requires an OIDC session", () => {
     await expect(page.getByText("Your response has been saved")).toBeVisible();
     await page.click("button >> text='Back to poll'");
     await expect(page.getByText(BOB.name)).toBeVisible();
+  });
+
+  test("an OIDC user votes from the /vote page under their identity provider name and email", async ({
+    page,
+  }) => {
+    await page.goto(votePageUrl);
+    await signInWithAuthentik(page, BOB);
+    await page.waitForURL(/\/vote/);
+
+    await page
+      .getByTestId("vote-selector")
+      .first()
+      .getByRole("radio", { name: "Yes" })
+      .click();
+    await page.getByRole("button", { name: "Continue" }).click();
+
+    const name = page.getByPlaceholder("Jessie Smith");
+    const email = page.getByPlaceholder("jessie.smith@example.com");
+    await expect(name).toHaveValue(BOB.name);
+    await expect(name).toBeDisabled();
+    await expect(email).toHaveValue(BOB.email);
+    await expect(email).toBeDisabled();
+
+    await page.getByRole("button", { name: "Save availability" }).click();
+    await expect(page.getByText("Your response has been saved")).toBeVisible();
+    await page.getByRole("button", { name: "Back to poll" }).click();
+    await expect(page.locator("footer").getByText(BOB.name)).toBeVisible();
   });
 });

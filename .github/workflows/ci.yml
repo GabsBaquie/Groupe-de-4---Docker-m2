@@ -184,15 +184,16 @@ jobs:
         env:
           CI: "true"
         run: pnpm --filter @rallly/web exec playwright test --config playwright.oidc.config.ts
-      # The only response in the database must be Bob's, stored under the
-      # identity Authentik asserted and linked to his user: nothing a guest
-      # typed (the refused /vote attempt) and no hand-typed name may reach it.
+      # Bob voted once per voting page. Every stored response must carry the
+      # identity Authentik asserted, linked to his user: nothing a guest typed
+      # and no hand-typed name may reach the database.
       - name: Check the stored identity
         run: |
           rows=$(docker compose -f docker-compose.yml -f docker-compose.ci.yml exec -T db psql -U postgres rallly -tA -c \
             "select name || '|' || email || '|' || (user_id is not null) from participants")
           echo "$rows"
-          test "$rows" = "Bob Voter|bob@example.com|true"
+          test "$(echo "$rows" | wc -l | tr -d ' ')" = "2"
+          test "$(echo "$rows" | sort -u)" = "Bob Voter|bob@example.com|true"
       - name: Upload Playwright traces
         if: failure()
         uses: actions/upload-artifact@v4
