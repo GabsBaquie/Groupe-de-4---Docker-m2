@@ -3,6 +3,7 @@ import { buttonVariants } from "@rallly/ui";
 import { ArrowUpRightIcon, EyeIcon } from "lucide-react";
 import { Link } from "@/components/link";
 import { Spinner } from "@/components/spinner";
+import { useOidcVoting } from "@/features/poll/client";
 import { EventCard } from "@/features/poll/components/event-card";
 import { PollFooter } from "@/features/poll/components/poll-footer";
 import { PollPageShell } from "@/features/poll/components/poll-page-shell";
@@ -41,6 +42,7 @@ export function InvitePage({
   canManage: boolean;
 }) {
   const hydrated = useHydrated();
+  const oidcVoting = useOidcVoting();
 
   if (!hydrated) {
     return <InvitePageLoading />;
@@ -49,10 +51,12 @@ export function InvitePage({
   const content = (
     <>
       <EventCard description={description} />
-      <OidcSignInPrompt
-        providerName={oidcProviderName}
-        redirectTo={`/invite/${pollId}`}
-      />
+      {oidcVoting === "signInRequired" ? (
+        <OidcSignInPrompt
+          providerName={oidcProviderName}
+          redirectTo={`/invite/${pollId}`}
+        />
+      ) : null}
       <VotingForm>
         <ResponsiveResults />
         <FloatingComments />

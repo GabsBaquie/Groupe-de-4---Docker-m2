@@ -2,6 +2,7 @@
 import React from "react";
 import { useRequiredContext } from "@/components/use-required-context";
 import type {
+  OidcVotingState,
   PollComment,
   PollDetails,
   PollParticipant,
@@ -26,7 +27,7 @@ type PollContextValue = {
    * OIDC, "identityLocked" means the response is recorded under the IdP name
    * and email, so the form shows them read-only.
    */
-  oidcVoting: "off" | "signInRequired" | "identityLocked";
+  oidcVoting: OidcVotingState;
 };
 
 const PollContext = React.createContext<PollContextValue | null>(null);

@@ -61,6 +61,8 @@ interface NewParticipantModalProps {
   /** These fall back to the poll in context on the legacy surfaces. */
   pollId?: string;
   requireParticipantEmail?: boolean;
+  /** Falls back to the poll in context, like the two props above. */
+  identityLocked?: boolean;
   onSubmit?: (data: { id: string }) => void;
   onCancel?: () => void;
 }
@@ -138,7 +140,8 @@ export const NewParticipantForm = (props: NewParticipantModalProps) => {
   const { timeZone } = useDateTimeConfig();
   const { user, createGuestIfNeeded } = useUser();
   const isLoggedIn = user && !user.isGuest;
-  const identityLocked = useOidcVoting() === "identityLocked";
+  const lockedByContext = useOidcVoting() === "identityLocked";
+  const identityLocked = props.identityLocked ?? lockedByContext;
   const form = useForm({
     resolver: zodResolver(schema),
     defaultValues: {
