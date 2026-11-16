@@ -1,0 +1,11 @@
+# Reverse proxy : point d'entrée unique vers Rallly et Authentik.
+# *.localhost résout en 127.0.0.1 côté navigateur (RFC 6761), aucune
+# configuration DNS/hosts nécessaire pour y accéder depuis la machine hôte.
+
+http://rallly.localhost {
+	reverse_proxy rallly:3000
+}
+
+http://authentik.localhost {
+	reverse_proxy authentik-server:9000
+}

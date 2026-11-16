@@ -24,6 +24,11 @@ export const env = createEnv({
       .default("development"),
     SECRET_PASSWORD: z.string().min(32),
     /**
+     * An extra origin Better-Auth accepts alongside NEXT_PUBLIC_BASE_URL,
+     * e.g. a reverse proxy hostname the app is also reachable through.
+     */
+    ADDITIONAL_TRUSTED_ORIGIN: z.string().optional(),
+    /**
      * OIDC Configuration
      */
     OIDC_NAME: z.string().default("OpenID Connect"),
@@ -273,6 +278,7 @@ export const env = createEnv({
     DATABASE_URL: process.env.DATABASE_URL,
     NODE_ENV: process.env.NODE_ENV,
     SECRET_PASSWORD: process.env.SECRET_PASSWORD,
+    ADDITIONAL_TRUSTED_ORIGIN: process.env.ADDITIONAL_TRUSTED_ORIGIN,
     OIDC_NAME: process.env.OIDC_NAME,
     OIDC_DISCOVERY_URL: process.env.OIDC_DISCOVERY_URL,
     OIDC_CLIENT_ID: process.env.OIDC_CLIENT_ID,

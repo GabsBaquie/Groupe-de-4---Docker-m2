@@ -226,6 +226,7 @@ export function VoteForm({
   results,
   response,
   canVote,
+  pastOptionIds,
   identityLocked,
   pastOptionIds,
   children,
@@ -236,6 +237,8 @@ export function VoteForm({
   results: VotePageView["results"];
   response: VotePageView["response"];
   canVote: boolean;
+  /** Options that have passed, by the viewer's clock. */
+  pastOptionIds: Set<string>;
   /** The response is recorded under the IdP identity, so it is not editable. */
   identityLocked: boolean;
   /** Options that have passed, by the viewer's clock. */
