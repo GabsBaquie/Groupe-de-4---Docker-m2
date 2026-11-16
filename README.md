@@ -35,6 +35,24 @@ Mise en place :
 Si tu avais créé le provider à la main avec le même `client_id`, supprime-le d'abord :
 le blueprint échouerait (erreur loguée par le worker) et ton ancien provider resterait en place.
 
+## Déploiement sur une VM
+
+L'image Rallly est construite directement sur la VM (Docker + plugin compose
+installés, ports 3000 et 9000 ouverts, 4 Go de RAM ou du swap pour le build) :
+
+```bash
+git clone https://github.com/GabsBaquie/Groupe-de-4---Docker-m2.git && cd Groupe-de-4---Docker-m2
+cp .env.example .env   # puis éditer, avec <IP> = IP de la VM :
+#   RALLLY_URL=http://<IP>:3000
+#   OIDC_DISCOVERY_URL=http://<IP>:9000/application/o/rallly/.well-known/openid-configuration
+#   + secrets (SECRET_PASSWORD, POSTGRES_PASSWORD, AUTHENTIK_*, OIDC_CLIENT_SECRET)
+docker compose up -d --build
+```
+
+`RALLLY_URL` sert d'URL de base à Rallly et de redirect URI OIDC dans le blueprint
+Authentik. Mise à jour : `git pull && docker compose up -d --build`.
+Mailpit (8025) n'est pas à exposer publiquement.
+
 ## CI
 
 `.github/workflows/ci.yml` s'exécute sur chaque PR vers `main` et chaque push
