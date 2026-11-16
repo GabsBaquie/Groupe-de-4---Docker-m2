@@ -26,7 +26,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      NEXT_PUBLIC_BASE_URL: http://localhost:3000
+      NEXT_PUBLIC_BASE_URL: ${RALLLY_URL:-http://localhost:3000}
       # Accès alternatif via le reverse proxy (voir service `proxy`)
       ADDITIONAL_TRUSTED_ORIGIN: http://rallly.localhost
       SECRET_PASSWORD: ${SECRET_PASSWORD}
@@ -102,6 +102,7 @@ services:
       # Lus par le blueprint authentik/blueprints/rallly.yaml (!Env)
       OIDC_CLIENT_ID: ${OIDC_CLIENT_ID}
       OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET}
+      RALLLY_URL: ${RALLLY_URL:-http://localhost:3000}
     volumes:
       - ./authentik/blueprints:/blueprints/custom:ro
     ports:
