@@ -37,21 +37,32 @@ le blueprint échouerait (erreur loguée par le worker) et ton ancien provider r
 
 ## Déploiement sur une VM
 
-L'image Rallly est construite directement sur la VM (Docker + plugin compose
-installés, ports 3000 et 9000 ouverts, 4 Go de RAM ou du swap pour le build) :
+La CI (`.github/workflows/publish.yml`, à chaque push sur `main`) construit et publie
+sur GHCR : les images `rallly`, `rallly-authentik` (blueprints embarqués) et
+`rallly-proxy` (Caddyfile embarqué), ainsi que `docker-compose.yml` lui-même
+(`ghcr.io/gabsbaquie/rallly-stack`). La VM n'a besoin ni du repo ni du code source :
+seulement d'un `.env` et de Docker Compose ≥ 2.34.
+
+Une fois, après le premier run du workflow : GitHub → Packages → `rallly`,
+`rallly-authentik`, `rallly-proxy`, `rallly-stack` → Package settings →
+Change visibility → Public (sinon `docker login ghcr.io` sur la VM).
+
+Sur la VM, dans un dossier vide :
 
 ```bash
-git clone https://github.com/GabsBaquie/Groupe-de-4---Docker-m2.git && cd Groupe-de-4---Docker-m2
-cp .env.example .env   # puis éditer, avec <IP> = IP de la VM :
+curl -fsSLo .env https://raw.githubusercontent.com/GabsBaquie/Groupe-de-4---Docker-m2/main/.env.example
+vi .env   # avec <IP> = IP de la VM :
 #   RALLLY_URL=http://<IP>:3000
 #   OIDC_DISCOVERY_URL=http://<IP>:9000/application/o/rallly/.well-known/openid-configuration
 #   + secrets (SECRET_PASSWORD, POSTGRES_PASSWORD, AUTHENTIK_*, OIDC_CLIENT_SECRET)
-docker compose up -d --build
+export COMPOSE_FILE=oci://ghcr.io/gabsbaquie/rallly-stack:latest
+docker compose up -d
 ```
 
-`RALLLY_URL` sert d'URL de base à Rallly et de redirect URI OIDC dans le blueprint
-Authentik. Mise à jour : `git pull && docker compose up -d --build`.
-Mailpit (8025) n'est pas à exposer publiquement.
+Mise à jour : `docker compose pull && docker compose up -d`. Retour en arrière :
+`COMPOSE_FILE=oci://ghcr.io/gabsbaquie/rallly-stack:sha-<commit>`. Les données
+(volumes Docker) sont conservées. Mailpit (8025) n'est pas à exposer publiquement.
+En local, `docker compose up -d --build` reconstruit toutes les images depuis le repo.
 
 ## CI
 

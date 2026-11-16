@@ -4,12 +4,12 @@ services:
   # (3000, 9000) restent ouverts en parallèle pour ne pas casser la CI, qui
   # s'appuie dessus (voir .github/workflows/ci.yml).
   proxy:
-    image: caddy:2-alpine
+    image: ghcr.io/gabsbaquie/rallly-proxy:latest
+    build: ./proxy
     restart: unless-stopped
     ports:
       - "80:80"
     volumes:
-      - ./proxy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
       - caddy-config:/config
     depends_on:
@@ -17,6 +17,9 @@ services:
       - authentik-server
 
   rallly:
+    # Image construite hors de la VM et publiée sur GHCR (`docker compose pull rallly`).
+    # Sans l'avoir tirée, `docker compose up --build` la reconstruit depuis ./rallly.
+    image: ${RALLLY_IMAGE:-ghcr.io/gabsbaquie/rallly:latest}
     build:
       context: ./rallly
       dockerfile: ./apps/web/Dockerfile
@@ -90,7 +93,8 @@ services:
       retries: 5
 
   authentik-server:
-    image: ghcr.io/goauthentik/server:2025.10.1
+    image: &authentik-image ghcr.io/gabsbaquie/rallly-authentik:latest
+    build: &authentik-build ./authentik
     restart: unless-stopped
     command: server
     environment: &authentik-env
@@ -103,8 +107,6 @@ services:
       OIDC_CLIENT_ID: ${OIDC_CLIENT_ID}
       OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET}
       RALLLY_URL: ${RALLLY_URL:-http://localhost:3000}
-    volumes:
-      - ./authentik/blueprints:/blueprints/custom:ro
     ports:
       - "9000:9000"    # interface web Authentik
     depends_on:
@@ -112,12 +114,11 @@ services:
         condition: service_healthy
 
   authentik-worker:
-    image: ghcr.io/goauthentik/server:2025.10.1
+    image: *authentik-image
+    build: *authentik-build
     restart: unless-stopped
     command: worker
     environment: *authentik-env
-    volumes:
-      - ./authentik/blueprints:/blueprints/custom:ro
     depends_on:
       authentik-db:
         condition: service_healthy
