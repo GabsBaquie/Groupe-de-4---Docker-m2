@@ -1,0 +1,111 @@
+name: Publish stack
+
+# À chaque push sur main : construit les 3 images (rallly, authentik avec ses
+# blueprints, proxy avec son Caddyfile) puis publie docker-compose.yml comme
+# artefact OCI. La VM n'a besoin que d'un .env :
+#   docker compose -f oci://ghcr.io/gabsbaquie/rallly-stack:latest up -d
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  # GHCR exige des noms en minuscules
+  REGISTRY_OWNER: gabsbaquie
+
+jobs:
+  publish:
+    name: Publish images and compose
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Rallly image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./rallly
+          file: ./rallly/apps/web/Dockerfile
+          build-args: SELF_HOSTED=true
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ghcr.io/${{ env.REGISTRY_OWNER }}/rallly:latest
+            ghcr.io/${{ env.REGISTRY_OWNER }}/rallly:sha-${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Authentik image (blueprints included)
+        uses: docker/build-push-action@v6
+        with:
+          context: ./authentik
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ghcr.io/${{ env.REGISTRY_OWNER }}/rallly-authentik:latest
+            ghcr.io/${{ env.REGISTRY_OWNER }}/rallly-authentik:sha-${{ github.sha }}
+
+      - name: Proxy image (Caddyfile included)
+        uses: docker/build-push-action@v6
+        with:
+          context: ./proxy
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ghcr.io/${{ env.REGISTRY_OWNER }}/rallly-proxy:latest
+            ghcr.io/${{ env.REGISTRY_OWNER }}/rallly-proxy:sha-${{ github.sha }}
+
+      # `publish` pousse aussi les images référencées : elles doivent exister
+      # en local, et --resolve-image-digests fige chaque version dans l'artefact
+      # (le tag sha-… permet ainsi un vrai retour en arrière).
+      - name: Pull the pushed images
+        run: docker compose pull rallly authentik-server proxy
+        env:
+          SECRET_PASSWORD: ci
+          POSTGRES_PASSWORD: ci
+          SUPPORT_EMAIL: ci@example.com
+          AUTHENTIK_SECRET_KEY: ci
+          AUTHENTIK_DB_PASSWORD: ci
+          OIDC_DISCOVERY_URL: ci
+          OIDC_CLIENT_ID: ci
+          OIDC_CLIENT_SECRET: ci
+
+      - name: Publish the compose file
+        run: |
+          for tag in latest sha-${{ github.sha }}; do
+            docker compose -f docker-compose.yml publish \
+              --resolve-image-digests --yes \
+              "ghcr.io/${REGISTRY_OWNER}/rallly-stack:${tag}"
+          done
+        env:
+          SECRET_PASSWORD: ci
+          POSTGRES_PASSWORD: ci
+          SUPPORT_EMAIL: ci@example.com
+          AUTHENTIK_SECRET_KEY: ci
+          AUTHENTIK_DB_PASSWORD: ci
+          OIDC_DISCOVERY_URL: ci
+          OIDC_CLIENT_ID: ci
+          OIDC_CLIENT_SECRET: ci
+
+      # Garde-fou : l'artefact doit laisser la VM fournir ses propres valeurs.
+      # Si `publish` avait figé les valeurs factices ci-dessus, ce step échoue.
+      - name: Check the published compose reads variables at runtime
+        run: |
+          out=$(SECRET_PASSWORD=sentinel-from-the-vm POSTGRES_PASSWORD=x AUTHENTIK_SECRET_KEY=x \
+            AUTHENTIK_DB_PASSWORD=x OIDC_DISCOVERY_URL=x OIDC_CLIENT_ID=x OIDC_CLIENT_SECRET=x \
+            SUPPORT_EMAIL=x@example.com \
+            docker compose -f "oci://ghcr.io/${REGISTRY_OWNER}/rallly-stack:latest" config)
+          echo "$out" | grep -q sentinel-from-the-vm

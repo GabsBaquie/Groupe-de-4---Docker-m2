@@ -5,8 +5,12 @@ services:
     image: rallly-ci:latest
     pull_policy: never
   authentik-server:
+    pull_policy: build
     volumes:
       - ./authentik/blueprints-ci:/blueprints/ci:ro
   authentik-worker:
+    pull_policy: build
     volumes:
       - ./authentik/blueprints-ci:/blueprints/ci:ro
+  proxy:
+    pull_policy: build
